@@ -10,7 +10,7 @@ openai-whisper==20250625
 # silence. Its own CTranslate2 weights are not used - see docs/accuracy-notes.md.
 faster-whisper>=1.2.0
 
-numpy>=2.0
+numpy>=2.5.3
 
 # Native Win32 controls, which is why NVDA and JAWS read the interface without
 # any custom accessibility work. NVDA itself is written with wxPython.
