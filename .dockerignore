@@ -1,0 +1,21 @@
+# Keep the build context small: the model weights alone are 1.5 GB and are
+# mounted as a volume, never copied into the image.
+models/
+out/
+audio/
+.venv/
+.git/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# The Windows desktop application and its launchers have no place in a Linux
+# image - see the Dockerfile header.
+app/
+tests/
+tools/
+docs/
+*.bat
+*.vbs
+*.md
+!docker/README.md

@@ -1,0 +1,14 @@
+# Container dependencies: the transcription engine only.
+#
+# The desktop application is deliberately absent. wxPython needs a display and
+# pywin32 needs Windows, and the Word integration needs Word itself - none of
+# that can run in a Linux container, so the image ships the engine and its HTTP
+# API instead. See docker/README.md.
+#
+# torch is pinned to the CPU wheel index in the Dockerfile; without that pip
+# pulls the CUDA build and the image grows by several gigabytes for nothing.
+openai-whisper==20250625
+numpy>=2.0
+# faster-whisper is installed for its Silero VAD, which engine/chunking.py uses
+# to split on silence. Its own weights come from huggingface.co and are not used.
+faster-whisper>=1.2.0

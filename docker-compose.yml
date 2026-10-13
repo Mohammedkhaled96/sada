@@ -1,0 +1,69 @@
+# Sada - engine and HTTP API in a container.
+#
+# This is not the desktop application: the Word integration, the interface and
+# the global shortcuts are Windows-only. This runs the transcription engine so a
+# server, a CI job, or another machine can use it. See docker/README.md.
+#
+#   docker compose run --rm fetch turbo     # download a model, once
+#   docker compose up -d                    # start the service
+#   docker compose logs -f sada      # the token is printed here
+
+services:
+  sada:
+    build: .
+    image: sada
+    container_name: sada
+    restart: unless-stopped
+    ports:
+      # Published on loopback only. Change to "8765:8765" to expose it on the
+      # network, and set SADA_TOKEN to something you chose before you do.
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ./models:/models          # checkpoints; survives rebuilds
+      - ./audio:/audio:ro         # put files to transcribe here, read-only
+      - ./out:/out                # transcripts land here
+    environment:
+      # A fixed token so clients know it in advance. Leave it unset and one is
+      # generated per start and printed to the logs instead.
+      SADA_TOKEN: ${SADA_TOKEN:-}
+      SADA_MODELS_DIR: /models
+      SADA_OUT_DIR: /out
+      # Leave at least two cores for everything else on the host.
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-6}
+    command:
+      - python
+      - -m
+      - engine.daemon
+      - --model
+      - ${SADA_MODEL:-turbo}
+      - --port
+      - "8765"
+      - --host
+      - 0.0.0.0
+      - --print-token
+
+  # One-shot helper to populate the models volume. A container has no Settings
+  # page, so this is how a model gets there.
+  #   docker compose run --rm fetch --list
+  #   docker compose run --rm fetch turbo
+  fetch:
+    build: .
+    image: sada
+    profiles: ["tools"]
+    volumes:
+      - ./models:/models
+    entrypoint: ["python", "-m", "engine.fetch"]
+
+  # One-shot transcription without the service, writing to ./out.
+  #   docker compose run --rm cli /audio/meeting.m4a
+  cli:
+    build: .
+    image: sada
+    profiles: ["tools"]
+    volumes:
+      - ./models:/models
+      - ./audio:/audio:ro
+      - ./out:/out
+    environment:
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-6}
+    entrypoint: ["python", "-m", "engine.transcribe", "--out", "/out"]

@@ -1,0 +1,24 @@
+# Windows desktop application.
+# For the container, see docker/requirements.txt - it omits the Windows-only
+# parts, which cannot run in a Linux image.
+
+# Speech recognition. Reads OpenAI's own .pt checkpoints and carries its tiktoken
+# vocabulary inside the package, so it needs nothing from huggingface.co.
+openai-whisper==20250625
+
+# Installed for its Silero VAD, which engine/chunking.py uses to split on
+# silence. Its own CTranslate2 weights are not used - see docs/accuracy-notes.md.
+faster-whisper>=1.2.0
+
+numpy>=2.0
+
+# Native Win32 controls, which is why NVDA and JAWS read the interface without
+# any custom accessibility work. NVDA itself is written with wxPython.
+wxPython>=4.3.0
+
+# Word over COM, and the JAWS scripting API.
+pywin32>=306
+
+# torch is pulled in by openai-whisper. On a CPU-only machine install the smaller
+# CPU wheel first to avoid downloading the CUDA build:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu

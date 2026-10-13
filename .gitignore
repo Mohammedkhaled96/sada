@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Model checkpoints: 461 MB to 2.9 GB each, fetched on demand.
+models/
+# Transcripts and checkpoints produced by a run.
+out/
+# Audio dropped in for the container to read.
+audio/
+# A token pasted into publish-to-dockerhub.bat must never be committed.
+publish-to-dockerhub.local.bat
+
+# ffmpeg/ffprobe are third-party binaries the user supplies (README: put them in
+# bin/ or on PATH). ffmpeg.exe alone is 242 MB - over GitHub's 100 MB limit.
+bin/*.exe
