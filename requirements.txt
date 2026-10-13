@@ -8,7 +8,7 @@ openai-whisper==20250625
 
 # Installed for its Silero VAD, which engine/chunking.py uses to split on
 # silence. Its own CTranslate2 weights are not used - see docs/accuracy-notes.md.
-faster-whisper>=1.2.0
+faster-whisper>=1.2.1
 
 numpy>=2.0
 

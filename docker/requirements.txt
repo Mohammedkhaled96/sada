@@ -11,4 +11,4 @@ openai-whisper==20250625
 numpy>=2.0
 # faster-whisper is installed for its Silero VAD, which engine/chunking.py uses
 # to split on silence. Its own weights come from huggingface.co and are not used.
-faster-whisper>=1.2.0
+faster-whisper>=1.2.1
