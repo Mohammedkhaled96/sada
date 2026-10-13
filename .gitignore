@@ -14,3 +14,9 @@ publish-to-dockerhub.local.bat
 # ffmpeg/ffprobe are third-party binaries the user supplies (README: put them in
 # bin/ or on PATH). ffmpeg.exe alone is 242 MB - over GitHub's 100 MB limit.
 bin/*.exe
+
+# Built installers are published as GitHub release assets, not committed
+# (Sada-Setup-1.0.0.exe is 238 MB; GitHub rejects files over 100 MB).
+release/*.exe
+dist/
+build/

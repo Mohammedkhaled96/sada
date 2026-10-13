@@ -9,6 +9,9 @@
 [![100% local](https://img.shields.io/badge/audio-never%20leaves%20your%20PC-success)](#why-it-exists)
 [![Accessible](https://img.shields.io/badge/screen%20readers-NVDA%20%7C%20JAWS-5A2D82)](docs/accessibility.md)
 [![Price](https://img.shields.io/badge/price-free-brightgreen)](#why-it-exists)
+[![Latest release](https://img.shields.io/github/v/release/Mohammedkhaled96/sada?label=latest&logo=github)](https://github.com/Mohammedkhaled96/sada/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Mohammedkhaled96/sada/total?logo=github&label=downloads)](https://github.com/Mohammedkhaled96/sada/releases)
+[![winget](https://img.shields.io/badge/winget-install%20sada-0078D6?logo=windows&logoColor=white)](#download)
 
 A free, fully local replacement for Microsoft 365's paid Transcribe feature, for
 ordinary desktop Word.
@@ -19,6 +22,34 @@ audio never leaves the machine.
 
 Built to be fully usable from the keyboard and with the **NVDA** and **JAWS**
 screen readers.
+
+---
+
+## Download
+
+**[⬇️ Download the latest installer](https://github.com/Mohammedkhaled96/sada/releases/latest)** — Windows 10/11, no Python needed.
+
+| | |
+|---|---|
+| **Direct download** | [`Sada-Setup-1.0.0.exe`](https://github.com/Mohammedkhaled96/sada/releases/download/v1.0.0/Sada-Setup-1.0.0.exe) (238 MB) |
+| **All releases** | [releases page](https://github.com/Mohammedkhaled96/sada/releases) |
+| **Checksum** | `SHA256SUMS.txt` is attached to each release |
+
+### Or install from the command line
+
+```powershell
+winget install sada
+```
+
+Unattended, with no prompts — handy for scripted or remote setups:
+
+```powershell
+winget install sada --silent --accept-package-agreements --accept-source-agreements
+```
+
+Upgrade later with `winget upgrade sada`, and remove it with `winget uninstall sada`.
+The installer needs no administrator rights: it installs for the current user
+only, and the speech model is downloaded afterwards from the settings window.
 
 ---
 
@@ -78,6 +109,9 @@ automatically.
 ---
 
 ## Install
+
+> Most people want the installer instead — see [Download](#download). The steps
+> below are for running from source.
 
 Needs **Windows**, **Microsoft Word** (2016 or newer, including the free desktop
 version), and **Python 3.12**.
