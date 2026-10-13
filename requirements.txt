@@ -17,7 +17,7 @@ numpy>=2.0
 wxPython>=4.3.0
 
 # Word over COM, and the JAWS scripting API.
-pywin32>=306
+pywin32>=312
 
 # torch is pulled in by openai-whisper. On a CPU-only machine install the smaller
 # CPU wheel first to avoid downloading the CUDA build:
