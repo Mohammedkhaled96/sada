@@ -1,0 +1,45 @@
+name: Publish to WinGet
+
+# Opens a pull request on microsoft/winget-pkgs for MohammedKhaled.Sada every
+# time a release is published, so `winget install sada` tracks the newest
+# version without anyone editing a manifest by hand.
+#
+# Requires:
+#   - the WINGET_TOKEN repository secret (classic PAT with public_repo)
+#   - a fork of microsoft/winget-pkgs under the same account
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to submit (for example v1.0.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Submit MohammedKhaled.Sada
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check WINGET_TOKEN secret
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "::error::Add the WINGET_TOKEN repository secret (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Submit manifest update
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: MohammedKhaled.Sada
+          installers-regex: 'Sada-Setup-.*\.exe$'
+          release-tag: ${{ github.event.release.tag_name || inputs.tag }}
+          fork-user: Mohammedkhaled96
+          token: ${{ secrets.WINGET_TOKEN }}

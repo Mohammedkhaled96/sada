@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Syntax, lint & manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The runtime dependencies are Windows-only (wxPython, pywin32) and torch
+      # is a ~200 MB download, so CI checks what can be checked without them:
+      # every module must parse, and real errors must be absent.
+      - name: Byte-compile every module
+        run: python -m compileall -q app engine tools tests
+
+      - name: Lint for real errors only
+        run: |
+          pip install ruff
+          ruff check --select E9,F63,F7,F82 --output-format=github .
+
+      - name: Validate the winget manifests
+        run: |
+          pip install pyyaml
+          python tools/validate_winget.py
