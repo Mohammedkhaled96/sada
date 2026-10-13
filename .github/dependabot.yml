@@ -1,15 +1,10 @@
 version: 2
 updates:
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    groups:
-      torch:
-        patterns: ['torch*']
-      whisper:
-        patterns: ['openai-whisper', 'faster-whisper']
+  # pip version updates are intentionally NOT enabled. requirements.txt uses
+  # deliberate lower bounds (">=") rather than pins, so a "bump the floor" PR
+  # changes nothing at install time while locking out users on an older but
+  # working release. Real vulnerabilities still arrive through Dependabot
+  # security updates, which are enabled in the repository settings.
 
   - package-ecosystem: github-actions
     directory: /
