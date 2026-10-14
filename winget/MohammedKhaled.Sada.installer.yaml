@@ -67,7 +67,7 @@ AppsAndFeaturesEntries:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/Mohammedkhaled96/sada/releases/download/v1.0.0/Sada-Setup-1.0.0.exe
-    InstallerSha256: 55DEA348DB244952A8D323752F5B64C3A2610DAC7CC64BCC8692BF9344387DDE
+    InstallerSha256: 3198D4DEAC122F4FBCC7F150B9BAFF0C37F094A614D17B7181915AC5ADBAC4C0
 
 ManifestType: installer
 ManifestVersion: 1.6.0
