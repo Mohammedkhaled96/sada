@@ -36,6 +36,23 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt pyinstaller
 
+      # ffmpeg does all the decoding and is shipped inside the application, but
+      # the binary is 100 MB+ and is deliberately not in the repository, so the
+      # build has to fetch it. Without this the spec stops with "bin/ffmpeg.exe
+      # is missing" and nothing is ever published.
+      - name: Fetch ffmpeg
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          $dir = "$env:RUNNER_TEMP\ffmpeg"
+          Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          $exe = Get-ChildItem $dir -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $exe) { throw 'ffmpeg.exe was not found in the downloaded archive' }
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Copy-Item $exe.FullName 'bin\ffmpeg.exe' -Force
+          "{0:N0} MB" -f ((Get-Item 'bin\ffmpeg.exe').Length / 1MB)
+
       - name: Build the application
         run: python -m PyInstaller Sada.spec --noconfirm
 
