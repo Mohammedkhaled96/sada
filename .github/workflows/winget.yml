@@ -7,6 +7,14 @@ name: Publish to WinGet
 # Requires:
 #   - the WINGET_TOKEN repository secret (classic PAT with public_repo)
 #   - a fork of microsoft/winget-pkgs under the same account
+#   - the package to exist in winget-pkgs already; winget-releaser only adds a
+#     new version to a package that is there, so the first submission is a
+#     pull request opened by hand
+#
+# The `release: published` trigger does not fire for a release that release.yml
+# creates, because GitHub does not start a workflow from an event raised with
+# the default GITHUB_TOKEN. Run this one from the Actions tab with the tag, or
+# give release.yml a PAT if it should chain automatically.
 
 on:
   release:
