@@ -81,11 +81,20 @@ them, so a missing secret costs seconds rather than a failed build.
 
 `engine/`, `docker/` and the `Dockerfile` are what the container image holds -
 `app/` is the Windows desktop program and is deliberately excluded. A release
-that changes only `app/` produces a byte-identical image. It is still tagged
-with the new version so that "which image goes with my version" has an answer,
-and the push is cheap because every large layer is already on the registry.
+that changes only `app/` therefore changes nothing that goes into the image,
+and is still tagged with the new version so that "which image goes with my
+version" has an answer.
 
-Check with:
+The image that comes out is not identical, though, and it is worth being clear
+why. 1.0.1 changed nothing under `engine/`, `docker/` or the `Dockerfile`, and
+still published a different digest from 1.0.0 - `74c8a85e` against `452acf43`.
+Three things move even when this repository does not: the `VERSION` label, by
+design; `python:3.12-slim`, which is rebuilt upstream; and the dependency
+versions pip resolves at build time. The build is repeatable, not
+reproducible. If a byte-for-byte rebuild ever matters, that needs pinned
+dependency versions and a digest-pinned base image, and neither is in place.
+
+Check what changed with:
 
 ```bash
 git diff --stat v1.0.1 v1.0.2 -- engine/ docker/ Dockerfile .dockerignore
