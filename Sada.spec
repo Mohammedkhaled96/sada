@@ -39,6 +39,12 @@ else:
         "Without it the application cannot read a single audio file."
     )
 
+# The .ico is read at runtime for the tray and window icons, so it has to be a
+# bundled file as well as being compiled into the exe header below.
+icon_file = PROJECT / "assets" / "sada.ico"
+if icon_file.exists():
+    datas.append((str(icon_file), "assets"))
+
 binaries = []
 binaries += collect_dynamic_libs("torch")
 

@@ -41,6 +41,54 @@ VIDEO_EXT = "*.mp4;*.mkv;*.avi;*.mov;*.webm"
 
 HK_TRANSCRIBE, HK_SETTINGS, HK_STATUS, HK_CANCEL, HK_WINDOW = 1, 2, 3, 4, 5
 
+_icon_cache = None
+
+
+def icon_path() -> Path | None:
+    """The .ico, both when running from source and inside a frozen build.
+
+    PyInstaller unpacks bundled data under sys._MEIPASS, so the file is not
+    where __file__ suggests.
+    """
+    roots = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots += [Path(meipass) / "assets", Path(meipass)]
+    roots.append(Path(__file__).resolve().parent.parent / "assets")
+    for root in roots:
+        candidate = root / "sada.ico"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def app_icon() -> "wx.Icon":
+    """The window and tray icon, loaded once.
+
+    Falls back to a plain coloured square if the file is missing, because a
+    missing icon must not stop the program from starting - the icon is the one
+    part of this application its users cannot see anyway.
+    """
+    global _icon_cache
+    if _icon_cache is not None:
+        return _icon_cache
+    path = icon_path()
+    if path is not None:
+        try:
+            _icon_cache = wx.Icon(str(path), wx.BITMAP_TYPE_ICO)
+            if _icon_cache.IsOk():
+                return _icon_cache
+        except Exception:
+            pass
+    bmp = wx.Bitmap(16, 16)
+    dc = wx.MemoryDC(bmp)
+    dc.SetBackground(wx.Brush(wx.Colour(30, 58, 138)))
+    dc.Clear()
+    del dc
+    _icon_cache = wx.Icon()
+    _icon_cache.CopyFromBitmap(bmp)
+    return _icon_cache
+
 
 def wildcard() -> str:
     return (f"{t('wildcard_all_media')}|{AUDIO_EXT};{VIDEO_EXT}"
@@ -59,18 +107,7 @@ class TrayIcon(wx.adv.TaskBarIcon):
         self.set_state("tray_ready")
 
     def set_state(self, key: str) -> None:
-        bmp = wx.Bitmap(16, 16)
-        dc = wx.MemoryDC(bmp)
-        dc.SetBackground(wx.Brush(wx.Colour(30, 90, 160)))
-        dc.Clear()
-        dc.SetTextForeground(wx.Colour(255, 255, 255))
-        dc.SetFont(wx.Font(9, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                           wx.FONTWEIGHT_BOLD))
-        dc.DrawText("T", 4, 1)
-        del dc
-        icon = wx.Icon()
-        icon.CopyFromBitmap(bmp)
-        self.SetIcon(icon, f"{t('app_name')} - {t(key)}")
+        self.SetIcon(app_icon(), f"{t('app_name')} - {t(key)}")
 
     def CreatePopupMenu(self):
         m = wx.Menu()
@@ -125,6 +162,8 @@ class AppFrame(wx.Frame):
                                on_finished=self._job_finished)
 
         self.window = MainWindow(self)
+        self.window.SetIcon(app_icon())
+        self.SetIcon(app_icon())
         self.tray = TrayIcon(self)
         self._registered: list[int] = []
         self.register_hotkeys()

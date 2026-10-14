@@ -67,6 +67,8 @@ WizardSizePercent=120
 
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
+; The icon shown on the setup executable itself and in Add/Remove Programs.
+SetupIconFile=..\assets\sada.ico
 
 MinVersion=10.0
 ArchitecturesAllowed=x64compatible
