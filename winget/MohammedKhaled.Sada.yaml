@@ -3,7 +3,7 @@
 # Version manifest. One of the three files winget requires; it only points at
 # the other two.
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.0.0
+PackageVersion: 1.0.1
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.6.0

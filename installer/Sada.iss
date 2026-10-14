@@ -6,8 +6,8 @@
 ;
 ; One installer, two ways to run it:
 ;
-;   Sada-Setup-1.0.0.exe                                  interactive wizard
-;   Sada-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   unattended
+;   Sada-Setup-1.0.1.exe                                  interactive wizard
+;   Sada-Setup-1.0.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   unattended
 ;
 ; The silent form is what winget invokes, so it must complete with no window, no
 ; prompt and no reboot, and must still register a working uninstaller. Everything
@@ -24,7 +24,7 @@
 ; under %LocalAppData%\Sada so an upgrade or reinstall never re-downloads it.
 
 #define AppName          "Sada"
-#define AppVersion       "1.0.0"
+#define AppVersion       "1.0.1"
 #define AppPublisher     "Mohammed Khaled"
 #define AppExe           "Sada.exe"
 #define AppUrl           "https://hub.docker.com/r/mohammedkhaledmahmoud/sada"

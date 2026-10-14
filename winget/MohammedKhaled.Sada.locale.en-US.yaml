@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.0.0
+PackageVersion: 1.0.1
 PackageLocale: en-US
 
 Publisher: Mohammed Khaled
@@ -71,16 +71,25 @@ Tags:
   - productivity
 
 ReleaseNotes: |-
-  First release.
+  An application icon, and fixes to the model settings that mattered most for
+  screen reader users.
 
-  - Transcribes audio and video into Microsoft Word from a keyboard shortcut
-  - Automatic language detection, locked per file so it cannot change mid-way
-  - Resumes an interrupted recording instead of starting over
-  - Job queue, with a visible list and a cancel that does not block new work
-  - English and Arabic interface, and spoken progress for screen reader users
-  - Speech models are downloaded from settings, not bundled
+  - Sada now has a proper icon, on the window, the tray, the installer and in
+    Add or remove programs
+  - Keyboard shortcut fields in settings announce which command they belong to.
+    They used to read out only the keys, so "Ctrl Shift T" gave no clue what it
+    would do
+  - Downloading a model shows real progress: amount, percentage, measured speed
+    and time remaining, spoken at every ten percent and readable at any moment
+  - Deleting a model now confirms that it happened, and says why if it did not.
+    Success and failure were previously both silent
+  - Fixed deleting the wrong model: after a download the list quietly moved the
+    selection back to the configured model
+  - An installed copy keeps its model under the user profile, so upgrading no
+    longer throws away a download of up to 1.5 GB
+  - Leftovers from a cancelled download are cleared at startup
 
-ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.0.0
+ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.0.1
 
 Documentations:
   - DocumentLabel: User Guide
