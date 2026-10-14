@@ -56,13 +56,19 @@ jobs:
       - name: Build the application
         run: python -m PyInstaller Sada.spec --noconfirm
 
+      # /O overrides the OutputDir in the script, so the installer lands in
+      # release\ no matter what installer\Sada.iss says. Without it the two
+      # disagreed and the hashing step below found nothing.
       - name: Build the installer with Inno Setup
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
-          & $iscc 'installer\Sada.iss'
+          $out = Join-Path $PWD.Path 'release'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          & $iscc "/O$out" 'installer\Sada.iss'
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+          Get-ChildItem $out | Select-Object Name, Length
 
       - name: Hash the installer
         shell: pwsh
