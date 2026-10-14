@@ -231,10 +231,23 @@ Published on Docker Hub, so transcription works on any machine with Docker and
 nothing else installed — no Python, no ffmpeg, no setup.
 
 ```bash
-docker pull mohammedkhaledmahmoud/sada
+docker pull mohammedkhaledmahmoud/sada:1
 ```
 
 [![Docker Hub](https://img.shields.io/badge/docker%20hub-mohammedkhaledmahmoud%2Fsada-blue)](https://hub.docker.com/r/mohammedkhaledmahmoud/sada)
+
+Four tags are published for every release:
+
+| Tag | Moves to | Use it when |
+|---|---|---|
+| `1.0.1` | nothing, ever | you need the same bytes every time — CI, a reproducible result |
+| `1.0` | the newest 1.0.x | you want fixes but no new behaviour |
+| `1` | the newest 1.x | **the sensible default**, and what `docker-compose.yml` uses |
+| `latest` | the newest release of all | you are trying it out and do not mind a major upgrade |
+
+Pick `:1` unless you have a reason not to. A bare
+`mohammedkhaledmahmoud/sada` means `:latest`, which will one day cross a
+major version and change behaviour under a running service.
 
 **The image is the engine, not the desktop app.** The Word integration needs Word
 itself over COM, and the interface and shortcuts need Windows, so none of that
@@ -487,6 +500,7 @@ document, and close it without saving — they never touch a document you have o
 | [docker/README.md](docker/README.md) | Running the engine in a container |
 | [docs/accessibility.md](docs/accessibility.md) | The screen-reader requirements, and what they changed |
 | [docs/accuracy-notes.md](docs/accuracy-notes.md) | Why each engine setting is what it is, with measurements |
+| [docs/releasing.md](docs/releasing.md) | How a release is cut, and the ordering constraints that are not guessable |
 
 ---
 

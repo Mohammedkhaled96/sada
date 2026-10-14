@@ -57,12 +57,15 @@ jobs:
             *) echo "::error::'$raw' is not a version like v1.0.1"; exit 1 ;;
           esac
           image=mohammedkhaledmahmoud/sada
-          # The x.y tag follows the newest patch, so a compose file can pin a
-          # minor line and still pick up fixes.
+          # Three moving tags beside the exact one. The major tag is what
+          # docker-compose.yml pins to: it picks up every fix inside 1.x
+          # without the compose default needing an edit per release, and
+          # without a 2.0 arriving unannounced on `docker compose pull`.
           minor="${version%.*}"
+          major="${version%%.*}"
           {
             echo "version=$version"
-            echo "tags=$image:$version,$image:$minor,$image:latest"
+            echo "tags=$image:$version,$image:$minor,$image:$major,$image:latest"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx

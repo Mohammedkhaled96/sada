@@ -7,11 +7,18 @@
 #   docker compose run --rm fetch turbo     # download a model, once
 #   docker compose up -d                    # start the service
 #   docker compose logs -f sada      # the token is printed here
+#
+# This pulls the published image, so the file works on its own without the
+# source tree. It pins the major tag: every fix inside 1.x arrives on
+# `docker compose pull`, a 2.0 never arrives unasked.
+#
+# To run your own build instead:
+#   docker build -t sada:dev .
+#   SADA_IMAGE=sada:dev docker compose up -d
 
 services:
   sada:
-    build: .
-    image: sada
+    image: ${SADA_IMAGE:-mohammedkhaledmahmoud/sada:1}
     container_name: sada
     restart: unless-stopped
     ports:
@@ -47,8 +54,7 @@ services:
   #   docker compose run --rm fetch --list
   #   docker compose run --rm fetch turbo
   fetch:
-    build: .
-    image: sada
+    image: ${SADA_IMAGE:-mohammedkhaledmahmoud/sada:1}
     profiles: ["tools"]
     volumes:
       - ./models:/models
@@ -57,8 +63,7 @@ services:
   # One-shot transcription without the service, writing to ./out.
   #   docker compose run --rm cli /audio/meeting.m4a
   cli:
-    build: .
-    image: sada
+    image: ${SADA_IMAGE:-mohammedkhaledmahmoud/sada:1}
     profiles: ["tools"]
     volumes:
       - ./models:/models
