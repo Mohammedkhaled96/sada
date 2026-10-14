@@ -1,0 +1,94 @@
+name: Publish the Docker image
+
+# Builds the engine image and pushes it to Docker Hub when a version tag is
+# pushed, so the published image always matches a tagged commit rather than
+# whatever happened to be on a developer's machine.
+#
+# Requires the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets
+# (Settings > Secrets and variables > Actions). The token is an access token
+# from Docker Hub with Read & Write, not the account password.
+#
+# This image holds engine/ only - the Word integration is a Windows desktop
+# program and cannot run in a Linux container. A release that changes nothing
+# under engine/ produces an identical image; it is still tagged with the new
+# version so that "which image goes with my version" has an answer, and the
+# push is cheap because every large layer is already on the registry.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version to publish (for example 1.0.1)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and push the image
+    runs-on: ubuntu-latest
+    steps:
+      # Checked before anything expensive, so a missing secret fails in seconds
+      # with a message that says what to do, rather than after a long build.
+      - name: Check the Docker Hub secrets
+        env:
+          DH_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DH_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DH_USER" ] || [ -z "$DH_TOKEN" ]; then
+            echo "::error::Add the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Work out the version and tags
+        id: v
+        run: |
+          set -eu
+          raw='${{ inputs.tag || github.ref_name }}'
+          version="${raw#v}"
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::'$raw' is not a version like v1.0.1"; exit 1 ;;
+          esac
+          image=mohammedkhaledmahmoud/sada
+          # The x.y tag follows the newest patch, so a compose file can pin a
+          # minor line and still pick up fixes.
+          minor="${version%.*}"
+          {
+            echo "version=$version"
+            echo "tags=$image:$version,$image:$minor,$image:latest"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # linux/amd64 only. torch has arm64 CPU wheels, but building them here
+      # means QEMU emulation, which turns a ten minute build into well over an
+      # hour. Worth adding when someone actually needs arm64.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          build-args: VERSION=${{ steps.v.outputs.version }}
+          tags: ${{ steps.v.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "### Docker image" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pushed \`${{ steps.v.outputs.tags }}\`" | tr ',' '\n' >> "$GITHUB_STEP_SUMMARY"

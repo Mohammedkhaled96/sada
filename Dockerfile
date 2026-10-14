@@ -64,7 +64,9 @@ COPY engine/ ./engine/
 
 # Metadata only, so this costs no image size and does not invalidate the pip
 # layers above. No licenses label until the project actually has a LICENSE file.
-ARG VERSION=1.0.0
+# No real version as the default: a build that is not told which release it is
+# must not claim to be one. CI passes the tag; a local build says "dev".
+ARG VERSION=dev
 LABEL org.opencontainers.image.title="Sada" \
       org.opencontainers.image.description="Local speech-to-text engine and HTTP API, built on Whisper. Runs offline, detects the language automatically, and has no limit on hours or file size. The Microsoft Word integration is a separate Windows desktop program and is not in this image." \
       org.opencontainers.image.version="${VERSION}" \
