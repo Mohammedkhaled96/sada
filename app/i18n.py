@@ -146,6 +146,59 @@ S: dict[str, tuple[str, str]] = {
                       "ينطق حالة العمل الجاري ونسبة التقدّم."),
     "field_k_cancel": ("Cancel the current job:", "إلغاء العمل الجاري:"),
 
+    # ------------------------------------------------------------ dictation
+    "group_dictation": ("Dictation", "الإملاء"),
+    "field_k_dictate": ("Start and stop dictation:", "بدء الإملاء وإيقافه:"),
+    "help_k_dictate": ("One shortcut for both: press it to start speaking, "
+                       "press it again to stop.",
+                       "اختصار واحد للاثنين: اضغطه لتبدأ الكلام، واضغطه مرة "
+                       "أخرى لتتوقف."),
+    "field_mic": ("Microphone:", "الميكروفون:"),
+    "mic_auto": ("Choose automatically", "اختيار تلقائي"),
+    "mic_none": ("No microphone was found", "لم يُعثر على ميكروفون"),
+    "help_mic": ("Which input to record from. Automatic takes the first one "
+                 "Windows reports.",
+                 "الجهاز الذي يُسجَّل منه. التلقائي يأخذ أول جهاز يذكره ويندوز."),
+    "field_pause": ("Pause that ends a phrase (milliseconds):",
+                    "السكتة التي تُنهي العبارة (ميلي ثانية):"),
+    "help_pause": ("How long you have to stop speaking before the phrase is "
+                   "written. Lower is faster but may cut a sentence where you "
+                   "drew breath.",
+                   "المدة التي تتوقف فيها عن الكلام قبل كتابة العبارة. الأقل "
+                   "أسرع لكنه قد يقطع الجملة عند أخذ النفس."),
+    "check_fillers": ("Remove hesitation sounds such as um and ممم",
+                      "إزالة أصوات التردّد مثل ممم و um"),
+    "help_fillers": ("Only sounds that are not words in any language are "
+                     "removed. Real words, including يعني "
+                     "and اه, are always kept.",
+                     "تُزال الأصوات التي ليست كلمات في أي لغة فقط. الكلمات "
+                     "الحقيقية، ومنها يعني و اه، "
+                     "تبقى دائمًا."),
+    "check_speak_phrases": ("Read each phrase aloud as it is written",
+                            "نطق كل عبارة عند كتابتها"),
+    "help_speak_phrases": ("Word does not announce text that a program inserts, "
+                           "so without this you would not hear what was written.",
+                           "لا يُعلن وورد عن نص يُدرجه برنامج آخر، فبدون هذا لن "
+                           "تسمع ما كُتب."),
+
+    "undo_dictation": ("Dictated phrase", "عبارة مُملاة"),
+    "tray_dictating": ("Dictating", "جارٍ الإملاء"),
+    "tray_dictate": ("Dictate", "إملاء"),
+    "say_transcribe_busy_dictating": ("Stop dictation first, then transcribe a file.",
+                                      "أوقف الإملاء أولًا ثم فرّغ ملفًا."),
+
+    "say_dictation_start": ("Start dictation", "بدء الإملاء"),
+    "say_dictation_stop": ("Stop", "إيقاف"),
+    "say_dictation_busy": ("Wait for the transcription to finish, then dictate.",
+                           "انتظر انتهاء التفريغ ثم أمْلِ."),
+    "say_dictation_failed": ("Dictation stopped. {error}",
+                             "توقف الإملاء. {error}"),
+    "say_dictation_status": ("Dictating. {n} phrases, {w} words so far.",
+                             "جارٍ الإملاء. {n} عبارة و{w} كلمة حتى الآن."),
+
+    "status_dictating": ("Dictating - {n} phrases, {w} words",
+                         "جارٍ الإملاء - {n} عبارة، {w} كلمة"),
+
     "check_speak": ("Speak the status and progress automatically",
                     "نطق الحالة والتقدّم تلقائيًا"),
     "field_progress_every": ("Speak progress every (seconds):",
@@ -357,10 +410,15 @@ S: dict[str, tuple[str, str]] = {
     "say_model_switch_later": ("The new model will be used after the current job "
                               "finishes.",
                               "سيُطبَّق النموذج الجديد بعد انتهاء العمل الجاري."),
-    "say_welcome": ("{app} is running. Press {k_start} to start transcribing, "
+    # Spoken once at startup. This is how someone who cannot see the window
+    # learns what the program can do, so a new feature that is not named here
+    # is a feature nobody finds.
+    "say_welcome": ("{app} is running. Press {k_start} to transcribe a file, "
+                    "{k_dictate} to dictate, "
                     "{k_window} for the program window, {k_settings} for settings, "
                     "and {k_status} to hear the status.",
-                    "{app} يعمل الآن. اضغط {k_start} لبدء التفريغ، "
+                    "{app} يعمل الآن. اضغط {k_start} لتفريغ ملف، "
+                    "و{k_dictate} للإملاء، "
                     "و{k_window} لفتح نافذة البرنامج، و{k_settings} للإعدادات، "
                     "و{k_status} لقراءة الحالة."),
 
@@ -425,8 +483,25 @@ Using it in five steps
 5. When it finishes, the text is inserted and the cursor is placed at the start of
    it, so you can begin reading straight away.
 
+Dictating straight into Word
+Press the dictation shortcut and start speaking. Each time you pause, that phrase
+is written at the cursor and read back to you. Press the same shortcut again to
+stop; whatever you were saying at that moment is still written.
+
+Hesitation sounds - "um", "uh", "ممم" - are left out, and a held letter is
+shortened, so "طيـــب" is written "طيب". Only sounds that are not words in any
+language are removed: real words, including "يعني" and "اه", are always kept. You
+can turn this off in Settings.
+
+Dictation and transcribing a file cannot run at the same time, because they share
+one model. Whichever is running, the program says so rather than interrupting it.
+
+Each phrase is a separate undo step, so Ctrl+Z takes back the last thing you said
+rather than the whole session.
+
 The shortcuts
 Start transcribing: opens the file chooser.
+Dictation: starts speaking into the document, and stops it. One key for both.
 Program window: status and every command in one place, including Exit.
 Settings: opens the settings window.
 Read the status: speaks what is happening, how far along it is, and the time left.
@@ -479,8 +554,22 @@ carries on from where it stopped.
 ٥. عند الانتهاء يُدرج النص في المستند، ويوضع مؤشر الكتابة في أول النص
    حتى تبدأ القراءة فورًا.
 
+الإملاء مباشرةً في وورد
+اضغط اختصار الإملاء وابدأ الكلام. كل مرة تسكت، تُكتب العبارة عند المؤشر وتُقرأ
+عليك. اضغط الاختصار نفسه لتتوقف؛ وما كنت تقوله في تلك اللحظة يُكتب أيضًا.
+
+تُحذف أصوات التردّد — «ممم» و«um» — ويُقصَّر الحرف الممدود، فتُكتب «طيـــب» هكذا:
+«طيب». ولا يُحذف إلا ما ليس كلمةً في أي لغة: الكلمات الحقيقية، ومنها «يعني»
+و«اه»، تبقى دائمًا. ويمكن إيقاف ذلك من الإعدادات.
+
+لا يعمل الإملاء وتفريغ الملفات في وقت واحد، لأنهما يتشاركان نموذجًا واحدًا. وأيّهما
+كان يعمل، يخبرك البرنامج بذلك بدلًا من مقاطعته.
+
+كل عبارة خطوة تراجع مستقلة، فـ Ctrl+Z يسترجع آخر ما قلته لا الجلسة كلها.
+
 الاختصارات
 بدء التفريغ: يفتح نافذة اختيار الملف.
+الإملاء: يبدأ الكلام في المستند ويوقفه. مفتاح واحد للاثنين.
 نافذة البرنامج: الحالة وكل الأوامر في مكان واحد، ومنها الخروج.
 الإعدادات: يفتح نافذة الإعدادات.
 قراءة الحالة: ينطق ما يجري الآن ونسبة التقدّم والوقت المتوقع.

@@ -65,6 +65,13 @@ class Settings:
     hotkey_status: str = "Ctrl+Shift+U"
     hotkey_cancel: str = "Ctrl+Shift+X"
     hotkey_window: str = "Ctrl+Shift+W"
+    hotkey_dictate: str = "Ctrl+Shift+D"
+
+    # dictation
+    mic_device: str = ""                    # empty = first device Windows reports
+    dictation_pause_ms: int = 600           # silence that ends a phrase
+    dictation_remove_fillers: bool = True
+    dictation_speak_phrases: bool = True    # Word does not announce our inserts
 
     # screen reader behaviour
     speak: bool = True
@@ -85,8 +92,11 @@ class Settings:
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
+        # Below ~200 ms a phrase is cut where the speaker drew breath; above a
+        # few seconds dictation stops feeling live.
+        self.dictation_pause_ms = max(200, min(3000, int(self.dictation_pause_ms)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
-                  "hotkey_cancel", "hotkey_window"):
+                  "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
             if not parse_hotkey(getattr(self, f)):
                 setattr(self, f, Settings.__dataclass_fields__[f].default)
         return self

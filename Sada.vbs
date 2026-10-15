@@ -4,8 +4,8 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 here = fso.GetParentFolderName(WScript.ScriptFullName)
 pyw = here & "\.venv\Scripts\pythonw.exe"
 If Not fso.FileExists(pyw) Then
-    MsgBox "لم يُعثر على بيئة بايثون في:" & vbCrLf & pyw & vbCrLf & vbCrLf & _
-           "شغّل setup.bat أولًا.", 16, "برنامج التفريغ النصي"
+    MsgBox "No Python environment was found at:" & vbCrLf & pyw & vbCrLf & vbCrLf & _
+           "Run setup.bat first.", 16, "Sada"
     WScript.Quit 1
 End If
 Set sh = CreateObject("WScript.Shell")

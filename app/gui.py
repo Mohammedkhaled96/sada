@@ -60,6 +60,26 @@ class _NamedAccessible(wx.Accessible):
         return (wx.ACC_OK, self._name)
 
 
+# Enumerating capture devices runs ffmpeg, so the answer is cached for the
+# process: opening Settings should not pay for a subprocess every time, and a
+# microphone being plugged in mid-session is rare enough to not be worth
+# re-checking on every repaint. A failure returns an empty list, which the
+# dialog shows as "no microphone was found" rather than an error.
+_mic_cache: list[str] | None = None
+
+
+def mic_devices() -> list[str]:
+    global _mic_cache
+    if _mic_cache is None:
+        try:
+            from engine.mic import list_input_devices
+
+            _mic_cache = list_input_devices()
+        except Exception:
+            _mic_cache = []
+    return list(_mic_cache)
+
+
 def _set_accessible_name(control, name: str) -> None:
     control.SetName(name)
     acc = _NamedAccessible(name)
@@ -170,14 +190,51 @@ class SettingsDialog(wx.Dialog):
         self.k_settings = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_settings))
         self.k_status = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_status))
         self.k_cancel = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_cancel))
+        self.k_dictate = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_dictate))
         _row(g3, box, t("field_k_transcribe"), self.k_transcribe,
              t("help_k_transcribe"))
         _row(g3, box, t("field_k_window"), self.k_window)
         _row(g3, box, t("field_k_settings"), self.k_settings)
         _row(g3, box, t("field_k_status"), self.k_status, t("help_k_status"))
         _row(g3, box, t("field_k_cancel"), self.k_cancel)
+        _row(g3, box, t("field_k_dictate"), self.k_dictate, t("help_k_dictate"))
         keys.Add(g3, 0, wx.EXPAND | wx.ALL, PAD)
         outer.Add(keys, 0, wx.EXPAND | wx.ALL, PAD)
+
+        # -------------------------------------------------------- dictation
+        dic = wx.StaticBoxSizer(wx.VERTICAL, panel, t("group_dictation"))
+        dbox = dic.GetStaticBox()
+        g5 = wx.FlexGridSizer(0, 2, PAD, PAD)
+        g5.AddGrowableCol(1, 1)
+
+        # Device names come from the driver, so they are whatever it calls
+        # itself. Listing them is a subprocess call, so it happens once here
+        # rather than every time the dialog repaints.
+        self._mics = mic_devices()
+        self.mic = wx.Choice(dbox, choices=[t("mic_auto")] + self._mics)
+        self.mic.SetSelection(
+            self._mics.index(settings.mic_device) + 1
+            if settings.mic_device in self._mics else 0)
+        if not self._mics:
+            self.mic.Enable(False)
+            self.mic.SetToolTip(t("mic_none"))
+        _row(g5, dbox, t("field_mic"), self.mic, t("help_mic"))
+
+        self.pause_ms = wx.SpinCtrl(dbox, min=200, max=3000,
+                                    initial=settings.dictation_pause_ms)
+        _row(g5, dbox, t("field_pause"), self.pause_ms, t("help_pause"))
+        dic.Add(g5, 0, wx.EXPAND | wx.ALL, PAD)
+
+        self.fillers = wx.CheckBox(dbox, label=t("check_fillers"))
+        self.fillers.SetValue(settings.dictation_remove_fillers)
+        self.fillers.SetToolTip(t("help_fillers"))
+        dic.Add(self.fillers, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD)
+
+        self.speak_phrases = wx.CheckBox(dbox, label=t("check_speak_phrases"))
+        self.speak_phrases.SetValue(settings.dictation_speak_phrases)
+        self.speak_phrases.SetToolTip(t("help_speak_phrases"))
+        dic.Add(self.speak_phrases, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD)
+        outer.Add(dic, 0, wx.EXPAND | wx.ALL, PAD)
 
         # ------------------------------------------------------ screen reader
         sr = wx.StaticBoxSizer(wx.VERTICAL, panel, t("group_reader"))
@@ -283,6 +340,7 @@ class SettingsDialog(wx.Dialog):
             "hotkey_settings": self.k_settings,
             "hotkey_status": self.k_status,
             "hotkey_cancel": self.k_cancel,
+            "hotkey_dictate": self.k_dictate,
         }
         seen: dict[tuple[int, int], str] = {}
         for name, ctrl in keys.items():
@@ -314,6 +372,11 @@ class SettingsDialog(wx.Dialog):
         s.speak_progress_every = int(self.progress_every.GetValue())
         s.speak_via_sapi = self.sapi.GetValue()
         s.only_when_word_focused = self.only_word.GetValue()
+        chosen = self.mic.GetSelection()
+        s.mic_device = self._mics[chosen - 1] if chosen > 0 else ""
+        s.dictation_pause_ms = int(self.pause_ms.GetValue())
+        s.dictation_remove_fillers = self.fillers.GetValue()
+        s.dictation_speak_phrases = self.speak_phrases.GetValue()
         s.validate()
         config.save(s)              # also switches the active language
         self.EndModal(wx.ID_OK)
@@ -554,10 +617,15 @@ class SettingsDialog(wx.Dialog):
         self.k_settings.SetValue(d.hotkey_settings)
         self.k_status.SetValue(d.hotkey_status)
         self.k_cancel.SetValue(d.hotkey_cancel)
+        self.k_dictate.SetValue(d.hotkey_dictate)
         self.speak.SetValue(d.speak)
         self.progress_every.SetValue(d.speak_progress_every)
         self.sapi.SetValue(d.speak_via_sapi)
         self.only_word.SetValue(d.only_when_word_focused)
+        self.mic.SetSelection(0)
+        self.pause_ms.SetValue(d.dictation_pause_ms)
+        self.fillers.SetValue(d.dictation_remove_fillers)
+        self.speak_phrases.SetValue(d.dictation_speak_phrases)
         self.was_reset = True
         self.ui_language.SetFocus()
         if self.on_announce:

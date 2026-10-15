@@ -30,6 +30,7 @@ from app.i18n import t
 from app.jobs import JobManager
 from app.speech import Speaker
 from engine.backends import load_backend
+from engine.dictation import Dictation, DictationConfig
 from engine import models
 from engine.device import pick_device
 
@@ -40,6 +41,7 @@ AUDIO_EXT = "*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.wma;*.flac;*.aac"
 VIDEO_EXT = "*.mp4;*.mkv;*.avi;*.mov;*.webm"
 
 HK_TRANSCRIBE, HK_SETTINGS, HK_STATUS, HK_CANCEL, HK_WINDOW = 1, 2, 3, 4, 5
+HK_DICTATE = 6
 
 _icon_cache = None
 
@@ -117,6 +119,8 @@ class TrayIcon(wx.adv.TaskBarIcon):
              self.frame.start_transcription),
             (f"{t('field_k_status').rstrip(':')}\t{s.hotkey_status}",
              self.frame.speak_status),
+            (f"{t('tray_dictate')}\t{s.hotkey_dictate}",
+             self.frame.toggle_dictation),
             (f"{t('btn_cancel')}\t{s.hotkey_cancel}", self.frame.cancel_job),
         ):
             item = m.Append(wx.ID_ANY, label)
@@ -157,6 +161,7 @@ class AppFrame(wx.Frame):
             pass            # housekeeping must never stop the app from starting
 
         self._last_spoken = 0.0
+        self.dictation: Dictation | None = None
         self.jobs = JobManager(lambda: self.backend, OUT_DIR,
                                on_change=self._job_changed,
                                on_finished=self._job_finished)
@@ -172,6 +177,7 @@ class AppFrame(wx.Frame):
         self.Bind(wx.EVT_HOTKEY, self.on_status, id=HK_STATUS)
         self.Bind(wx.EVT_HOTKEY, self.on_cancel, id=HK_CANCEL)
         self.Bind(wx.EVT_HOTKEY, self.on_window, id=HK_WINDOW)
+        self.Bind(wx.EVT_HOTKEY, self.on_dictate, id=HK_DICTATE)
 
         threading.Thread(target=self._load_model, daemon=True,
                          name="model-loader").start()
@@ -194,6 +200,7 @@ class AppFrame(wx.Frame):
             (HK_STATUS, self.settings.hotkey_status),
             (HK_CANCEL, self.settings.hotkey_cancel),
             (HK_WINDOW, self.settings.hotkey_window),
+            (HK_DICTATE, self.settings.hotkey_dictate),
         ):
             parsed = config.parse_hotkey(text)
             if not parsed:
@@ -268,12 +275,22 @@ class AppFrame(wx.Frame):
         if self._hotkey_allowed():
             self.cancel_job()
 
+    def on_dictate(self, _evt) -> None:
+        if self._hotkey_allowed():
+            self.toggle_dictation()
+
     # ------------------------------------------------------------ the job
     def start_transcription(self) -> None:
         """Always allowed to submit. A running or cancelling job no longer
         blocks a new one - it queues behind it."""
         if not self.model_ready.is_set():
             self.say(t("say_loading"), interrupt=True)
+            return
+        if self.dictation is not None and self.dictation.running:
+            # The same single-model constraint as the other direction.
+            # Stopping dictation silently to start a file would throw
+            # away the phrase being spoken, so refuse and say why.
+            self.say(t("say_transcribe_busy_dictating"), interrupt=True)
             return
         if self.backend_error or self.backend is None:
             msg = t("say_load_failed", error=self.backend_error or "")
@@ -317,6 +334,126 @@ class AppFrame(wx.Frame):
                       n=self.jobs.queued_count))
         else:
             self.say(t("say_started", name=job.filename))
+
+    # ------------------------------------------------------------- dictation
+    def toggle_dictation(self) -> None:
+        """One shortcut for both directions, which is what was asked for and
+        also the right shape: there is no state to remember and no second key
+        to find while talking."""
+        if self.dictation is not None and self.dictation.running:
+            self.stop_dictation()
+        else:
+            self.start_dictation()
+
+    def start_dictation(self) -> None:
+        if not self.model_ready.is_set():
+            self.say(t("say_loading"), interrupt=True)
+            return
+        if self.backend_error or self.backend is None:
+            self.say(t("say_load_failed", error=self.backend_error or ""),
+                     interrupt=True)
+            return
+
+        # One Whisper model, one caller at a time. Two concurrent forward
+        # passes through the same torch module is not a supported thing to do -
+        # it can return garbage or fault - so dictation and file transcription
+        # are mutually exclusive rather than quietly racing.
+        if self.jobs.busy:
+            self.say(t("say_dictation_busy"), interrupt=True)
+            return
+
+        # Fail before recording rather than after, so the user is not left
+        # talking into a microphone with nowhere to put the words.
+        try:
+            wordio.init_thread()
+            word = wordio.get_word()
+            wordio.active_document(word)
+        except wordio.WordNotRunning as exc:
+            self.say(str(exc), interrupt=True)
+            return
+
+        s = self.settings
+        self.dictation = Dictation(
+            self.backend,
+            config=DictationConfig(
+                pause_ms=s.dictation_pause_ms,
+                language=s.language_or_none,
+                remove_hesitations=s.dictation_remove_fillers,
+            ),
+            on_text=self._dictated_phrase,
+            on_error=self._dictation_failed,
+            mic_factory=self._make_microphone,
+        )
+        try:
+            self.dictation.start()
+        except Exception as exc:
+            self.dictation = None
+            self.say(t("say_dictation_failed", error=exc), interrupt=True)
+            return
+
+        self.tray.set_state("tray_dictating")
+        # Spoken before the first word is captured, and interrupting whatever
+        # the reader was saying, so the user knows the microphone is live.
+        self.say(t("say_dictation_start"), interrupt=True)
+
+    def stop_dictation(self) -> None:
+        session, self.dictation = self.dictation, None
+        if session is None:
+            return
+        # Said first, because stop() waits for the phrases already captured and
+        # the user needs to know the key registered before that wait.
+        self.say(t("say_dictation_stop"), interrupt=True)
+        threading.Thread(target=self._finish_dictation, args=(session,),
+                         daemon=True, name="dictation-stop").start()
+
+    def _finish_dictation(self, session) -> None:
+        try:
+            session.stop()
+        except Exception:
+            pass
+        wx.CallAfter(self._dictation_stopped)
+
+    def _dictation_stopped(self) -> None:
+        if self.dictation is None:
+            self.tray.set_state("tray_ready" if not self.backend_error
+                                else "tray_load_failed")
+
+    def _make_microphone(self):
+        from engine.mic import Microphone
+
+        return Microphone(self.settings.mic_device or None)
+
+    def _dictated_phrase(self, text: str) -> None:
+        """Called from the dictation worker thread, once per phrase."""
+        wx.CallAfter(self._insert_phrase, text)
+
+    def _insert_phrase(self, text: str) -> None:
+        from engine.textout import is_rtl
+
+        rtl = self.settings.rtl_auto and is_rtl(
+            (self.dictation.state.language if self.dictation else "") or "")
+        try:
+            wordio.init_thread()
+            word = wordio.get_word()
+            wordio.insert_dictation(word, text, rtl=rtl)
+        except Exception as exc:
+            # Word closed mid-sentence. Say the words rather than losing them
+            # silently, and let the session carry on.
+            self.say(text)
+            self.say(t("say_dictation_failed", error=exc))
+            return
+        # Word does not announce text that another program inserts, so without
+        # this the user would have no idea what was written.
+        if self.settings.dictation_speak_phrases:
+            self.say(text)
+
+    def _dictation_failed(self, message: str) -> None:
+        def report() -> None:
+            self.dictation = None
+            self.tray.set_state("tray_ready")
+            self.say(t("say_dictation_failed", error=message), interrupt=True)
+
+        wx.CallAfter(report)
 
     # ---------------------------------------------------------- job callbacks
     def _job_changed(self, job) -> None:
@@ -421,6 +558,12 @@ class AppFrame(wx.Frame):
             return t("say_loading")
         if self.backend_error:
             return t("say_load_failed", error=self.backend_error)
+
+        if self.dictation is not None and self.dictation.running:
+            state = self.dictation.state
+            self.say(t("say_dictation_status", n=state.phrases, w=state.words),
+                     interrupt=True)
+            return
 
         running = next((j for j in self.jobs.all() if j.state in
                         ("running", "cancelling")), None)
@@ -578,6 +721,10 @@ class AppFrame(wx.Frame):
         dlg.Destroy()
 
     def quit_app(self) -> None:
+        if self.dictation is not None and self.dictation.running:
+            # Otherwise ffmpeg outlives the app, still holding the
+            # microphone open.
+            self.stop_dictation()
         if self.jobs.active():
             if wx.MessageBox(t("quit_while_busy"), t("app_name"),
                              wx.YES_NO | wx.ICON_QUESTION) != wx.YES:
@@ -608,7 +755,9 @@ class TranscriberApp(wx.App):
 
         s = self.frame.settings
         self.frame.say(t("say_welcome", app=t("app_name"),
-                         k_start=s.hotkey_transcribe, k_window=s.hotkey_window,
+                         k_start=s.hotkey_transcribe,
+                         k_dictate=s.hotkey_dictate,
+                         k_window=s.hotkey_window,
                          k_settings=s.hotkey_settings, k_status=s.hotkey_status))
         return True
 

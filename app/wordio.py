@@ -155,6 +155,71 @@ def set_reading_order(rng, rtl: bool) -> bool:
     return False
 
 
+def insert_dictation(app, text: str, *, rtl: bool = False) -> dict:
+    """Append one dictated phrase at the insertion point.
+
+    Deliberately not insert_transcript. That one writes a finished transcript
+    as a block and collapses the selection back to the *start*, so a screen
+    reader user can read the result from its beginning. Dictation needs the
+    opposite of both: each phrase continues the last one, so it must be
+    separated by a space rather than a paragraph break, and the cursor has to
+    end up *after* the new text or the next phrase would land in front of it
+    and the sentence would assemble backwards.
+
+    One undo record per phrase, so Ctrl+Z takes back the last thing said
+    rather than the whole session.
+
+    Returns {"start": int, "end": int, "text": str} - `text` being what was
+    actually written, which includes the leading space when one was added.
+    """
+    if not text or not text.strip():
+        return {"start": 0, "end": 0, "text": ""}
+
+    undo = None
+    try:
+        undo = app.UndoRecord
+        undo.StartCustomRecord(t("undo_dictation"))
+    except Exception:
+        undo = None
+
+    try:
+        doc = active_document(app)
+        try:
+            doc.Activate()
+        except Exception:
+            pass
+
+        sel = app.Selection
+        start = int(sel.Range.Start)
+
+        # Space before the phrase, unless we are at the very start of the
+        # document or the character in front is already a space or a newline.
+        body = text.strip()
+        if start > 0:
+            try:
+                before = doc.Range(max(0, start - 1), start).Text or ""
+            except Exception:
+                before = ""
+            if before and before not in (" ", "\r", "\n", "\t", "\u000b"):
+                body = " " + body
+
+        sel.Range.InsertAfter(body)
+        rng = doc.Range(start, start + len(body))
+        reading_order = set_reading_order(rng, rtl)
+
+        end = int(rng.End)
+        # After the phrase, ready for the next one.
+        sel.SetRange(end, end)
+        return {"start": start, "end": end, "text": body,
+                "reading_order_set": reading_order}
+    finally:
+        if undo is not None:
+            try:
+                undo.EndCustomRecord()
+            except Exception:
+                pass
+
+
 def insert_transcript(app, text: str, *, rtl: bool = False,
                       mode: str = "cursor", heading: str | None = None) -> dict:
     """Write the transcript into Word.
