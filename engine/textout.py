@@ -30,11 +30,11 @@ def is_rtl(language: str) -> bool:
     return (language or "").split("-")[0].lower() in RTL_LANGUAGES
 
 
-def _is_junk(text: str) -> bool:
+def is_junk(text: str) -> bool:
     return any(p.match(text) for p in JUNK)
 
 
-def _collapse_repeats(text: str) -> str:
+def collapse_repeats(text: str) -> str:
     """Whisper sometimes stutters a word or phrase; keep one copy."""
     text = re.sub(r"\b(\w+)(\s+\1\b){2,}", r"\1", text, flags=re.UNICODE)
     text = re.sub(r"(\b[\w\s]{4,40}?\b)(\s*\1){2,}", r"\1", text, flags=re.UNICODE)
@@ -49,7 +49,7 @@ def build_paragraphs(segments: list[dict]) -> list[dict]:
     def flush() -> None:
         if not cur:
             return
-        text = _collapse_repeats(" ".join(s["text"] for s in cur))
+        text = collapse_repeats(" ".join(s["text"] for s in cur))
         if text:
             paragraphs.append({"start": cur[0]["start"], "end": cur[-1]["end"],
                                "text": text})
@@ -58,7 +58,7 @@ def build_paragraphs(segments: list[dict]) -> list[dict]:
     prev_end = None
     for seg in segments:
         text = (seg.get("text") or "").strip()
-        if not text or _is_junk(text):
+        if not text or is_junk(text):
             continue
 
         gap = seg["start"] - prev_end if prev_end is not None else 0.0
@@ -109,7 +109,7 @@ def write_outputs(job_dir: Path, stem: str, segments: list[dict],
         "\n".join(
             f"{i}\n{_srt_time(s['start'])} --> {_srt_time(s['end'])}\n{s['text']}\n"
             for i, s in enumerate(
-                (s for s in segments if s.get("text") and not _is_junk(s["text"])), 1)
+                (s for s in segments if s.get("text") and not is_junk(s["text"])), 1)
         ),
         encoding="utf-8",
     )
