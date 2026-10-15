@@ -77,7 +77,10 @@ S: dict[str, tuple[str, str]] = {
     "model_large-v3": ("large-v3 - most accurate, slower",
                        "large-v3 - الأدق وأبطأ"),
     "model_medium": ("medium - middle ground", "medium - متوسط"),
-    "model_small": ("small - for slower machines", "small - للأجهزة الضعيفة"),
+    "model_small": ("small - for slower machines, and the default for dictation",
+                    "small - للأجهزة الضعيفة، وافتراضي الإملاء"),
+    "model_tiny": ("tiny - fastest, least accurate",
+                   "tiny - الأسرع والأقل دقة"),
 
     "device_auto": ("Automatic - graphics card if present, otherwise processor",
                     "تلقائي - كارت الرسوم إن وُجد، وإلا المعالج"),
@@ -153,6 +156,36 @@ S: dict[str, tuple[str, str]] = {
                        "press it again to stop.",
                        "اختصار واحد للاثنين: اضغطه لتبدأ الكلام، واضغطه مرة "
                        "أخرى لتتوقف."),
+    "field_dictation_model": ("Model used for dictation:",
+                              "النموذج المستخدم للإملاء:"),
+    "help_dictation_model": ("Dictation needs a model that runs faster than you "
+                             "speak, which is not the same choice as for a file. "
+                             "On a processor without a graphics card, turbo runs "
+                             "slower than real time, so the text keeps falling "
+                             "further behind. small keeps up; tiny is instant but "
+                             "makes visible mistakes.",
+                             "يحتاج الإملاء نموذجًا أسرع من كلامك، وهو اختيار "
+                             "مختلف عن اختيار الملفات. على معالج بلا كارت رسوم، "
+                             "turbo أبطأ من الزمن الحقيقي فيتأخّر النص أكثر "
+                             "وأكثر. small يلاحق الكلام، وtiny فوري لكنه يخطئ "
+                             "بشكل ملحوظ."),
+    "field_target": ("Gather before writing (seconds):",
+                     "التجميع قبل الكتابة (ثانية):"),
+    "help_target": ("Whisper costs almost the same for two seconds of audio as "
+                    "for twenty, so writing after every short pause is much "
+                    "slower overall. A deliberate silence always writes "
+                    "immediately, whatever this is set to.",
+                    "تكلفة ويسبر لثانيتين من الصوت تقارب تكلفته لعشرين، فالكتابة "
+                    "بعد كل سكتة قصيرة أبطأ بكثير في المجموع. والسكوت المتعمَّد "
+                    "يكتب فورًا مهما كانت هذه القيمة."),
+    "say_dictation_model_missing": ("The dictation model {name} is not downloaded. "
+                                    "Open settings to download it.",
+                                    "نموذج الإملاء {name} غير مُنزَّل. افتح "
+                                    "الإعدادات لتنزيله."),
+    "say_dictation_loading": ("Preparing the dictation model. This happens once.",
+                              "جارٍ تهيئة نموذج الإملاء. يحدث هذا مرة واحدة."),
+    "say_dictation_pending": ("Stop. {n} phrases still being written.",
+                              "إيقاف. ما زالت {n} عبارة تُكتب."),
     "field_mic": ("Microphone:", "الميكروفون:"),
     "mic_auto": ("Choose automatically", "اختيار تلقائي"),
     "mic_none": ("No microphone was found", "لم يُعثر على ميكروفون"),

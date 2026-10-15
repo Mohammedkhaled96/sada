@@ -104,51 +104,74 @@ check("conditioning on previous text stays off",
 # -------------------------------------------------------------- phrase cutting
 print("\n--- phrase cutting ---")
 
-seg = new_segmenter(pause_ms=600)
-phrases = feed_all(seg, np.concatenate([loud(1.0), quiet(1.0)]))
-check("a phrase followed by a pause is emitted", len(phrases) == 1,
-      f"{len(phrases)} phrases")
+# The strategy being tested: a SHORT pause only ends a phrase once there is
+# enough audio to be worth a call, because Whisper costs nearly the same for
+# two seconds as for twenty. Before that it takes a deliberate silence, so
+# someone who says one sentence and waits still gets it back promptly.
+
+seg = new_segmenter(long_pause_ms=1400)
+phrases = feed_all(seg, np.concatenate([loud(1.0), quiet(1.8)]))
+check("one short sentence then a deliberate silence is written",
+      len(phrases) == 1, f"{len(phrases)} phrases")
 if phrases:
     seconds = len(phrases[0]) / SAMPLE_RATE
     check("the phrase is trimmed to its speech plus padding",
           1.0 <= seconds <= 1.6, f"{seconds:.2f}s")
 
-seg = new_segmenter(pause_ms=600)
+seg = new_segmenter(pause_ms=600, long_pause_ms=1400, target_phrase_s=12.0)
+phrases = feed_all(seg, np.concatenate([loud(1.0), quiet(0.8), loud(1.0),
+                                        quiet(0.8), loud(1.0), quiet(1.8)]))
+check("short pauses do not each start a new call - they are gathered",
+      len(phrases) == 1, f"{len(phrases)} phrases")
+if phrases:
+    seconds = len(phrases[0]) / SAMPLE_RATE
+    check("so one call covers all three fragments", seconds > 3.0,
+          f"{seconds:.2f}s")
+
+# Once there IS enough audio, a short pause is a good place to cut.
+seg = new_segmenter(pause_ms=600, long_pause_ms=1400, target_phrase_s=2.0)
 phrases = feed_all(seg, np.concatenate([
-    loud(0.8), quiet(1.0), loud(0.8), quiet(1.0)]))
-check("two phrases separated by a pause are two phrases", len(phrases) == 2,
+    loud(2.5), quiet(0.8), loud(2.5), quiet(0.8)]))
+check("past the target, a short pause ends the phrase", len(phrases) == 2,
       f"{len(phrases)} phrases")
 
-# A breath mid-sentence is shorter than the threshold and must not split it.
-seg = new_segmenter(pause_ms=600)
+# A breath mid-sentence is shorter than either threshold and must not split it.
+seg = new_segmenter(pause_ms=600, long_pause_ms=1400, target_phrase_s=2.0)
 phrases = feed_all(seg, np.concatenate([
-    loud(0.8), quiet(0.3), loud(0.8), quiet(1.0)]))
+    loud(0.8), quiet(0.3), loud(0.8), quiet(1.8)]))
 check("a short breath does not split a sentence", len(phrases) == 1,
       f"{len(phrases)} phrases")
 
-seg = new_segmenter(pause_ms=600)
+check("the default target is well above one phrase",
+      DictationConfig().target_phrase_s >= 8.0,
+      str(DictationConfig().target_phrase_s))
+check("the maximum phrase stays inside one 30 second whisper window",
+      DictationConfig().max_phrase_s <= 28.0,
+      str(DictationConfig().max_phrase_s))
+
+seg = new_segmenter()
 phrases = feed_all(seg, quiet(3.0))
 check("silence alone produces nothing", phrases == [], f"{len(phrases)} phrases")
 
-seg = new_segmenter(pause_ms=600, min_speech_ms=250)
-phrases = feed_all(seg, np.concatenate([loud(0.08), quiet(1.0)]))
+seg = new_segmenter(min_speech_ms=250)
+phrases = feed_all(seg, np.concatenate([loud(0.08), quiet(2.0)]))
 check("a click too short to be speech is discarded", phrases == [],
       f"{len(phrases)} phrases")
 
 # Waiting at an open microphone must not grow the buffer without end.
-seg = new_segmenter(pause_ms=600, tail_window_s=1.5)
+seg = new_segmenter(tail_window_s=1.5)
 feed_all(seg, quiet(20.0))
 held = len(seg._buf) / SAMPLE_RATE
 check("waiting on silence does not grow memory without end", held <= 1.6,
       f"{held:.2f}s held")
 
 # Someone who does not pause must still see words appear.
-seg = new_segmenter(pause_ms=600, max_phrase_s=2.0)
+seg = new_segmenter(max_phrase_s=2.0)
 phrases = feed_all(seg, loud(5.0))
 check("an unbroken talker is cut anyway", len(phrases) >= 2,
       f"{len(phrases)} phrases")
 
-seg = new_segmenter(pause_ms=600)
+seg = new_segmenter()
 feed_all(seg, loud(0.5))                    # still talking when stop is pressed
 tail = seg.flush()
 check("the last words are kept when recording stops", tail is not None,
@@ -257,9 +280,8 @@ def run_session(audio, texts, **cfg):
     return d, backend, got, errors
 
 
-script = np.concatenate([loud(0.8), quiet(1.0), loud(0.8), quiet(1.0)])
-d, backend, got, errors = run_session(script, ["السلام عليكم", "ممم طيب"],
-                                      pause_ms=600)
+script = np.concatenate([loud(0.8), quiet(1.8), loud(0.8), quiet(1.8)])
+d, backend, got, errors = run_session(script, ["السلام عليكم", "ممم طيب"])
 check("each phrase is delivered once", got == ["السلام عليكم", "طيب"], str(got))
 check("hesitation is filtered on the way out",
       "ممم" not in " ".join(got), str(got))
@@ -284,9 +306,93 @@ check("each call got only its own phrase, not the whole session",
       all(c["samples"] < 1.8 * SAMPLE_RATE for c in backend.calls),
       str([round(c["samples"] / SAMPLE_RATE, 2) for c in backend.calls]))
 
+# ---------------------------------------------------- mixing two languages
+# This is the bug a real user hit: the first version settled on one language
+# for the whole session and forced it on every phrase, so an English phrase
+# spoken by an Arabic speaker came back written in Arabic letters. A separate
+# small model names the language of each phrase instead.
+
+
+class FakeLid:
+    """Names a language per call, from a script."""
+
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.calls = 0
+
+    def detect_language(self, audio=None, **kw):
+        self.calls += 1
+        lang, conf = self.answers[min(self.calls - 1, len(self.answers) - 1)]
+        return lang, conf, [(lang, conf)]
+
+
+def run_with_lid(lid, texts, phrases=2):
+    audio = np.concatenate([loud(0.8), quiet(1.8)] * phrases)
+    backend = FakeBackend(texts)
+    got: list[str] = []
+    d = Dictation(
+        backend,
+        config=DictationConfig(),
+        on_text=got.append,
+        mic_factory=lambda: FakeMic(audio),
+        segmenter=UtteranceSegmenter(DictationConfig(),
+                                     speech_fn=amplitude_speech),
+        lid=lid,
+    )
+    d.start()
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and len(got) < len(texts):
+        time.sleep(0.02)
+    d.stop()
+    return d, backend, got
+
+
+lid = FakeLid([("ar", 0.96), ("en", 0.93)])
+d, backend, got = run_with_lid(lid, ["السلام عليكم", "hello there"])
+check("the language is named once per phrase, not once per session",
+      lid.calls == 2, f"{lid.calls} calls")
+check("an arabic phrase is transcribed as arabic",
+      backend.calls[0]["language"] == "ar",
+      str([c["language"] for c in backend.calls]))
+check("and an english phrase as english, in the same session",
+      backend.calls[1]["language"] == "en",
+      str([c["language"] for c in backend.calls]))
+check("the transcription model is never asked to identify the language",
+      backend.detections == [], str(backend.detections))
+
+# A phrase the identifier is unsure about should not be stamped with a guess.
+lid = FakeLid([("cy", 0.21)])
+_d, backend, _got = run_with_lid(lid, ["something unclear"], phrases=1)
+check("an unconfident identification defers to whisper instead of guessing",
+      backend.calls[0]["language"] is None,
+      str(backend.calls[0]["language"]))
+
+# An explicit language in the settings wins: the user asked for it.
+backend = FakeBackend(["bonjour"])
+lid = FakeLid([("en", 0.99)])
+got: list[str] = []
+d = Dictation(
+    backend,
+    config=DictationConfig(language="fr"),
+    on_text=got.append,
+    mic_factory=lambda: FakeMic(np.concatenate([loud(0.8), quiet(1.8)])),
+    segmenter=UtteranceSegmenter(DictationConfig(), speech_fn=amplitude_speech),
+    lid=lid,
+)
+d.start()
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline and not got:
+    time.sleep(0.02)
+d.stop()
+check("a language chosen in settings overrides the identifier",
+      backend.calls and backend.calls[0]["language"] == "fr",
+      str([c["language"] for c in backend.calls]))
+check("and the identifier is not even consulted", lid.calls == 0,
+      f"{lid.calls} calls")
+
+
 # An empty transcript must not reach the document.
-_d, _b, got, _e = run_session(np.concatenate([loud(0.8), quiet(1.0)]), [""],
-                              pause_ms=600)
+_d, _b, got, _e = run_session(np.concatenate([loud(0.8), quiet(1.8)]), [""])
 check("a phrase that transcribes to nothing inserts nothing", got == [],
       str(got))
 
@@ -318,11 +424,11 @@ class BrokenBackend(FakeBackend):
 errors: list[str] = []
 d = Dictation(
     BrokenBackend([]),
-    config=DictationConfig(pause_ms=600),
+    config=DictationConfig(),
     on_text=lambda t: None,
     on_error=errors.append,
-    mic_factory=lambda: FakeMic(np.concatenate([loud(0.8), quiet(1.0)])),
-    segmenter=UtteranceSegmenter(DictationConfig(pause_ms=600),
+    mic_factory=lambda: FakeMic(np.concatenate([loud(0.8), quiet(1.8)])),
+    segmenter=UtteranceSegmenter(DictationConfig(),
                                  speech_fn=amplitude_speech),
 )
 d.start()
@@ -344,11 +450,11 @@ def throw_once(text: str) -> None:
 
 d = Dictation(
     FakeBackend(["one", "two"]),
-    config=DictationConfig(pause_ms=600),
+    config=DictationConfig(),
     on_text=throw_once,
     mic_factory=lambda: FakeMic(np.concatenate([
-        loud(0.8), quiet(1.0), loud(0.8), quiet(1.0)])),
-    segmenter=UtteranceSegmenter(DictationConfig(pause_ms=600),
+        loud(0.8), quiet(1.8), loud(0.8), quiet(1.8)])),
+    segmenter=UtteranceSegmenter(DictationConfig(),
                                  speech_fn=amplitude_speech),
 )
 d.start()

@@ -15,7 +15,14 @@ from app import i18n
 STATE_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sada"
 SETTINGS_FILE = STATE_DIR / "settings.json"
 
-MODELS = ["turbo", "large-v3", "medium", "small"]
+# tiny is here for dictation. It is poor at transcribing a file, and the
+# only model on a CPU fast enough to put words on screen the moment you
+# stop speaking - see docs/dictation-speed.md.
+MODELS = ["turbo", "large-v3", "medium", "small", "tiny"]
+
+# Models offered for dictation, fastest-first ordering is deliberate:
+# throughput, not accuracy, is what decides whether dictation is usable.
+DICTATION_MODELS = ["small", "tiny", "turbo", "medium", "large-v3"]
 DEVICES = ["auto", "cuda", "cpu"]
 INSERT_MODES = ["cursor", "end", "new"]
 LANGUAGES = ["auto", "ar", "en", "fr", "de", "es", "tr", "ur", "fa"]
@@ -24,6 +31,10 @@ UI_LANGUAGES = i18n.UI_LANGUAGES
 
 def model_labels() -> list[str]:
     return [i18n.t(f"model_{m}") for m in MODELS]
+
+
+def dictation_model_labels() -> list[str]:
+    return [i18n.t(f"model_{m}") for m in DICTATION_MODELS]
 
 
 def device_labels() -> list[str]:
@@ -69,7 +80,12 @@ class Settings:
 
     # dictation
     mic_device: str = ""                    # empty = first device Windows reports
+    # Not the same model as file transcription on purpose. turbo runs at 0.91x
+    # real time on a CPU, so dictation with it falls further behind the speaker
+    # with every phrase; small runs at 1.32x. Measured - docs/dictation-speed.md.
+    dictation_model: str = "small"
     dictation_pause_ms: int = 600           # silence that ends a phrase
+    dictation_target_s: int = 12            # gather this much before a short pause counts
     dictation_remove_fillers: bool = True
     dictation_speak_phrases: bool = True    # Word does not announce our inserts
 
@@ -95,6 +111,10 @@ class Settings:
         # Below ~200 ms a phrase is cut where the speaker drew breath; above a
         # few seconds dictation stops feeling live.
         self.dictation_pause_ms = max(200, min(3000, int(self.dictation_pause_ms)))
+        # Above 25 s Whisper needs a second 30 s window and the cost steps up.
+        self.dictation_target_s = max(2, min(25, int(self.dictation_target_s)))
+        if self.dictation_model not in DICTATION_MODELS:
+            self.dictation_model = "small"
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
             if not parse_hotkey(getattr(self, f)):

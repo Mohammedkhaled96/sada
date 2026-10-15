@@ -24,7 +24,7 @@ import wx
 
 from app import config, i18n
 from engine import models
-from app.config import (DEVICES, INSERT_MODES, LANGUAGES, MODELS, UI_LANGUAGES,
+from app.config import (DEVICES, DICTATION_MODELS, INSERT_MODES, LANGUAGES, MODELS, UI_LANGUAGES,
                         Settings, device_labels, format_hotkey, insert_labels,
                         language_labels, model_labels, parse_hotkey,
                         ui_language_labels)
@@ -210,6 +210,14 @@ class SettingsDialog(wx.Dialog):
         # Device names come from the driver, so they are whatever it calls
         # itself. Listing them is a subprocess call, so it happens once here
         # rather than every time the dialog repaints.
+        self.dictation_model = wx.Choice(
+            dbox, choices=config.dictation_model_labels())
+        self.dictation_model.SetSelection(
+            DICTATION_MODELS.index(settings.dictation_model)
+            if settings.dictation_model in DICTATION_MODELS else 0)
+        _row(g5, dbox, t("field_dictation_model"), self.dictation_model,
+             t("help_dictation_model"))
+
         self._mics = mic_devices()
         self.mic = wx.Choice(dbox, choices=[t("mic_auto")] + self._mics)
         self.mic.SetSelection(
@@ -223,6 +231,10 @@ class SettingsDialog(wx.Dialog):
         self.pause_ms = wx.SpinCtrl(dbox, min=200, max=3000,
                                     initial=settings.dictation_pause_ms)
         _row(g5, dbox, t("field_pause"), self.pause_ms, t("help_pause"))
+
+        self.target_s = wx.SpinCtrl(dbox, min=2, max=25,
+                                    initial=settings.dictation_target_s)
+        _row(g5, dbox, t("field_target"), self.target_s, t("help_target"))
         dic.Add(g5, 0, wx.EXPAND | wx.ALL, PAD)
 
         self.fillers = wx.CheckBox(dbox, label=t("check_fillers"))
@@ -374,7 +386,9 @@ class SettingsDialog(wx.Dialog):
         s.only_when_word_focused = self.only_word.GetValue()
         chosen = self.mic.GetSelection()
         s.mic_device = self._mics[chosen - 1] if chosen > 0 else ""
+        s.dictation_model = DICTATION_MODELS[self.dictation_model.GetSelection()]
         s.dictation_pause_ms = int(self.pause_ms.GetValue())
+        s.dictation_target_s = int(self.target_s.GetValue())
         s.dictation_remove_fillers = self.fillers.GetValue()
         s.dictation_speak_phrases = self.speak_phrases.GetValue()
         s.validate()
@@ -623,7 +637,10 @@ class SettingsDialog(wx.Dialog):
         self.sapi.SetValue(d.speak_via_sapi)
         self.only_word.SetValue(d.only_when_word_focused)
         self.mic.SetSelection(0)
+        self.dictation_model.SetSelection(
+            DICTATION_MODELS.index(d.dictation_model))
         self.pause_ms.SetValue(d.dictation_pause_ms)
+        self.target_s.SetValue(d.dictation_target_s)
         self.fillers.SetValue(d.dictation_remove_fillers)
         self.speak_phrases.SetValue(d.dictation_speak_phrases)
         self.was_reset = True

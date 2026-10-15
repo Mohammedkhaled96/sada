@@ -162,6 +162,13 @@ class AppFrame(wx.Frame):
 
         self._last_spoken = 0.0
         self.dictation: Dictation | None = None
+        # Dictation runs a different model from file transcription, because
+        # throughput decides whether it is usable at all. Both are loaded
+        # lazily and kept, so the cost is paid once per session.
+        self.dictation_backend = None
+        self.dictation_backend_key = ""
+        self.lid_backend = None
+        self._dictation_lock = threading.Lock()
         self.jobs = JobManager(lambda: self.backend, OUT_DIR,
                                on_change=self._job_changed,
                                on_finished=self._job_finished)
@@ -372,28 +379,50 @@ class AppFrame(wx.Frame):
             self.say(str(exc), interrupt=True)
             return
 
+        if (self.dictation_backend is None
+                or self.dictation_backend_key != self.settings.dictation_model):
+            self.say(t("say_dictation_loading"), interrupt=True)
+        threading.Thread(target=self._begin_dictation, daemon=True,
+                         name="dictation-start").start()
+
+    def _begin_dictation(self) -> None:
+        """Loading a model blocks for tens of seconds, so this is off the UI
+        thread. Everything that touches wx goes back through CallAfter."""
+        problem = self._dictation_models_ready()
+        if problem:
+            wx.CallAfter(self.say, problem, True)
+            return
+
         s = self.settings
-        self.dictation = Dictation(
-            self.backend,
+        session = Dictation(
+            self.dictation_backend,
             config=DictationConfig(
                 pause_ms=s.dictation_pause_ms,
+                target_phrase_s=float(s.dictation_target_s),
                 language=s.language_or_none,
                 remove_hesitations=s.dictation_remove_fillers,
             ),
             on_text=self._dictated_phrase,
             on_error=self._dictation_failed,
             mic_factory=self._make_microphone,
+            lid=self.lid_backend,
         )
         try:
-            self.dictation.start()
+            session.start()
         except Exception as exc:
-            self.dictation = None
-            self.say(t("say_dictation_failed", error=exc), interrupt=True)
+            wx.CallAfter(self.say, t("say_dictation_failed", error=exc), True)
             return
+        wx.CallAfter(self._dictation_started, session)
 
+    def _dictation_started(self, session) -> None:
+        # The shortcut may have been pressed again while the model loaded.
+        if self.dictation is not None:
+            threading.Thread(target=session.stop, daemon=True).start()
+            return
+        self.dictation = session
         self.tray.set_state("tray_dictating")
-        # Spoken before the first word is captured, and interrupting whatever
-        # the reader was saying, so the user knows the microphone is live.
+        # Said as soon as the microphone is actually live, interrupting
+        # whatever the reader was saying, so there is no doubt it started.
         self.say(t("say_dictation_start"), interrupt=True)
 
     def stop_dictation(self) -> None:
@@ -401,8 +430,14 @@ class AppFrame(wx.Frame):
         if session is None:
             return
         # Said first, because stop() waits for the phrases already captured and
-        # the user needs to know the key registered before that wait.
-        self.say(t("say_dictation_stop"), interrupt=True)
+        # the user needs to know the key registered before that wait. If any
+        # are still queued, say how many: an unexplained pause with a screen
+        # reader silent is indistinguishable from a hung program.
+        pending = session.pending
+        if pending:
+            self.say(t("say_dictation_pending", n=pending), interrupt=True)
+        else:
+            self.say(t("say_dictation_stop"), interrupt=True)
         threading.Thread(target=self._finish_dictation, args=(session,),
                          daemon=True, name="dictation-stop").start()
 
@@ -417,6 +452,38 @@ class AppFrame(wx.Frame):
         if self.dictation is None:
             self.tray.set_state("tray_ready" if not self.backend_error
                                 else "tray_load_failed")
+
+    def _dictation_models_ready(self) -> str:
+        """Load the dictation model and the language identifier.
+
+        Returns "" on success or a message to speak. Called on the worker
+        thread that is about to record, never on the UI thread: loading
+        large-v3-turbo took 43 seconds on the reference machine, and freezing
+        the interface for that long looks like a crash.
+        """
+        s = self.settings
+        with self._dictation_lock:
+            if (self.dictation_backend is not None
+                    and self.dictation_backend_key == s.dictation_model):
+                return ""
+            if not models.info(s.dictation_model).installed:
+                return t("say_dictation_model_missing", name=s.dictation_model)
+            try:
+                self.dictation_backend = load_backend(
+                    "auto", s.dictation_model, self.device)
+                self.dictation_backend_key = s.dictation_model
+            except Exception as exc:
+                self.dictation_backend = None
+                return t("say_dictation_failed", error=exc)
+
+            # The identifier is optional: without it, dictation still works,
+            # it just cannot follow a speaker who switches language.
+            if self.lid_backend is None and models.info("tiny").installed:
+                try:
+                    self.lid_backend = load_backend("auto", "tiny", self.device)
+                except Exception:
+                    self.lid_backend = None
+            return ""
 
     def _make_microphone(self):
         from engine.mic import Microphone

@@ -70,18 +70,41 @@ SEG_VAD = dict(
 
 @dataclass
 class DictationConfig:
-    """Timings a speaker actually feels.
+    """How speech is cut into phrases, and why the numbers are what they are.
 
-    `pause_ms` is the one to tune. Too short and a phrase is cut while someone
-    draws breath mid-sentence; too long and the words take noticeably longer to
-    appear. 600 ms sits above a breath and below a thinking pause.
+    The first version of this cut at every 600 ms pause, which turned out to
+    be the worst possible strategy, for a reason that is not obvious: Whisper
+    pads every clip to a 30-second window before encoding it, so **a two
+    second phrase costs about as much as a twenty second one**. Measured on
+    this project's CPU reference machine with large-v3-turbo:
+
+        2 s of audio   12.6 s   0.16x real time
+        5 s             9.9 s   0.50x
+       10 s            11.6 s   0.86x
+       20 s            21.9 s   0.91x
+
+    Cutting at every short pause therefore maximised the number of expensive
+    calls, the queue fell further behind the speaker with every phrase, and
+    pressing stop meant waiting for the whole backlog. Longer phrases are both
+    faster overall and fewer.
+
+    So a short pause only ends a phrase once `target_phrase_s` of audio has
+    been gathered. Before that, only a deliberate `long_pause_ms` silence ends
+    it - which is what happens when someone says one sentence and waits, so a
+    short utterance still comes back quickly.
+
+    `max_phrase_s` stays under 30 s on purpose: beyond that Whisper needs a
+    second window, and the cost steps up.
     """
-    pause_ms: int = 600
-    min_speech_ms: int = 250         # below this it is a cough, not a phrase
-    max_phrase_s: float = 20.0       # cut anyway, so nothing ever stalls
-    tail_window_s: float = 1.5       # how much audio the pause is measured over
-    pad_ms: int = 200                # kept around the speech when cutting
-    language: str | None = None      # None detects once, on the first phrase
+    pause_ms: int = 600             # ends a phrase once the target is reached
+    long_pause_ms: int = 1400       # ends a phrase at any length
+    target_phrase_s: float = 12.0   # gather at least this before a short pause counts
+    min_speech_ms: int = 250        # below this it is a cough, not a phrase
+    max_phrase_s: float = 25.0      # cut anyway, and stay inside one 30 s window
+    tail_window_s: float = 2.0      # how much audio a pause is measured over
+    pad_ms: int = 200               # kept around the speech when cutting
+    language: str | None = None     # None identifies the language per phrase
+    language_confidence: float = 0.5    # below this, let Whisper decide instead
     remove_hesitations: bool = True
 
 
@@ -178,22 +201,29 @@ class UtteranceSegmenter:
             return []
         self._buf = np.concatenate([self._buf, block])
 
-        pause = self._samples(self.cfg.pause_ms)
+        short = self._samples(self.cfg.pause_ms)
+        long = self._samples(self.cfg.long_pause_ms)
+        target = int(self.cfg.target_phrase_s * self.sampling_rate)
         window_len = self._samples(self.cfg.tail_window_s * 1000)
         window = self._buf[-window_len:] if len(self._buf) > window_len else self._buf
 
         # Force a cut on a speaker who has not paused. Without this, dictating
         # a long sentence in one breath would hold every word back until the
-        # end of it.
+        # end of it - and would eventually cross the 30 second window.
         if len(self._buf) >= self.cfg.max_phrase_s * self.sampling_rate:
             phrase = self._cut()
             return [phrase] if phrase is not None else []
 
-        if len(self._buf) < pause:
+        if len(self._buf) < short:
             return []
 
-        if self._trailing_silence(window) < pause:
-            return []                       # still talking
+        silence = self._trailing_silence(window)
+        # A short pause only ends a phrase once there is enough audio to be
+        # worth a call; before that it takes a deliberate silence. See the
+        # measurements in DictationConfig for why.
+        needed = short if len(self._buf) >= target else long
+        if silence < needed:
+            return []                       # still talking, or only pausing
 
         phrase = self._cut()
         if phrase is not None:
@@ -258,8 +288,11 @@ class Dictation:
 
     def __init__(self, backend, *, config: DictationConfig | None = None,
                  on_text=None, on_error=None, on_state=None,
-                 mic_factory=None, segmenter=None):
+                 mic_factory=None, segmenter=None, lid=None):
         self.backend = backend
+        # A small model used only to name the language of each phrase. See
+        # _resolve_language for the measurements behind this.
+        self.lid = lid
         self.cfg = config or DictationConfig()
         self._on_text = on_text
         self._on_error = on_error
@@ -280,6 +313,13 @@ class Dictation:
     @property
     def running(self) -> bool:
         return self.state.running
+
+    @property
+    def pending(self) -> int:
+        """Phrases captured but not yet written. Pressing stop waits for
+        these, so the interface can say how many there are instead of going
+        quiet for an unexplained stretch."""
+        return self._phrases.qsize()
 
     def start(self) -> None:
         if self.state.running:
@@ -386,24 +426,56 @@ class Dictation:
                     pass                    # a failed insert must not kill the session
 
     def _resolve_language(self, clip: np.ndarray) -> str:
-        """Detect once per session, from the first few phrases together.
+        """Identify the language of *this* phrase.
 
-        Two things pull against each other here. Deciding from one phrase is
-        unreliable - a second of audio is a poor language sample, and a wrong
-        answer would lock the whole session to the wrong language. Waiting for
-        a single long phrase does not work either: dictated phrases are mostly
-        one to two seconds, so a per-phrase length threshold was never reached
-        and the language was never settled at all, which left every phrase
-        going to Whisper with no language and detecting its own - an extra pass
-        each time, and free to flip mid-paragraph.
+        The previous version settled on one language for the whole session and
+        forced it on every phrase. For a speaker who mixes Arabic and English -
+        which is most people dictating technical work - that is actively
+        destructive: forced to Arabic, Whisper writes English words in Arabic
+        letters, and the result was unusable.
 
-        So phrases accumulate until there is enough audio to ask about, and
-        that answer holds for the session. Until then Whisper decides per
-        phrase, which is correct, just slower.
+        Letting Whisper detect on its own instead is correct but expensive,
+        because it costs a second encoder pass over the padded 30-second
+        window. Measured on the reference machine, for a 10 second phrase:
+
+            large-v3-turbo   with a language 9.9 s    detecting 23.4 s
+            small            with a language 7.0 s    detecting 11.4 s
+
+        So detection is done by a separate, much smaller model whose only job
+        is to name the language. That is a task a small model is good at, and
+        it is cheap - measured on the same clip:
+
+            tiny    detect_language 0.20 s   -> ar 0.96
+            small   detect_language 2.58 s   -> ar 0.90
+
+        tiny is both faster and, here, more confident than small. So with a
+        `lid` model supplied, every phrase gets its own language for 0.2 s,
+        and mixed speech works.
+
+        Without one, we fall back to asking the transcription model once and
+        reusing the answer, which is cheap but cannot follow a speaker who
+        switches language.
         """
+        if self.cfg.language:
+            return self.cfg.language
+
+        if self.lid is not None:
+            try:
+                language, confidence, _ranked = self.lid.detect_language(audio=clip)
+            except Exception:
+                return ""
+            if confidence < self.cfg.language_confidence:
+                # An unclear phrase: let Whisper decide for this one rather
+                # than stamping a guess on it.
+                return ""
+            if language != self.state.language:
+                self.state.language = language
+                self._notify()
+            return language
+
+        # No identifier model: settle once and reuse it.
         if self._language:
             return self._language
-
         self._sample = (clip if self._sample is None
                         else np.concatenate([self._sample, clip]))
         if len(self._sample) < MIN_DETECT_S * SAMPLE_RATE:
@@ -414,7 +486,7 @@ class Dictation:
         except Exception:
             return ""
         finally:
-            self._sample = None             # not needed once it has been asked
+            self._sample = None
         self._language = language
         self.state.language = language
         self._notify()

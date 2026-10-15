@@ -501,6 +501,7 @@ document, and close it without saving — they never touch a document you have o
 | [docs/accessibility.md](docs/accessibility.md) | The screen-reader requirements, and what they changed |
 | [docs/accuracy-notes.md](docs/accuracy-notes.md) | Why each engine setting is what it is, with measurements |
 | [docs/releasing.md](docs/releasing.md) | How a release is cut, and the ordering constraints that are not guessable |
+| [docs/dictation-speed.md](docs/dictation-speed.md) | Why dictation uses its own model, measured, and what the delay actually is |
 
 ---
 
