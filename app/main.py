@@ -30,7 +30,7 @@ from app.i18n import t
 from app.jobs import JobManager
 from app.speech import Speaker
 from engine.backends import load_backend
-from engine import models
+from engine import models, paths
 from engine.device import pick_device
 
 from engine.paths import OUT_DIR
@@ -153,6 +153,19 @@ class AppFrame(wx.Frame):
         # folder forever, taking space and looking like a half-installed model.
         try:
             models.cleanup_partials()
+        except Exception:
+            pass            # housekeeping must never stop the app from starting
+
+        # One location for this program's data, not two. Settings moved out of
+        # the user profile and into the program's own folder, so an older copy
+        # could be left behind there - a second settings.json that nothing
+        # reads, and perhaps gigabytes of models nothing uses.
+        #
+        # This runs after config.load(), which has already copied those
+        # settings across, and never touches the folder currently in use.
+        self.state_cleanup = {"removed": [], "adopted": [], "failed": []}
+        try:
+            self.state_cleanup = paths.cleanup_duplicate_state()
         except Exception:
             pass            # housekeeping must never stop the app from starting
 

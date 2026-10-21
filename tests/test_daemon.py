@@ -21,7 +21,13 @@ sys.path.insert(0, str(ROOT))
 
 PY = ROOT / ".venv" / "Scripts" / "python.exe"
 AUDIO = Path("E:/test.mp3")
-STATE = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sada"
+
+# Asked of engine.paths rather than rebuilt here. This test used to spell
+# the location out itself, so when the program's data moved the test went
+# on checking the old place and reported a daemon that was working
+# perfectly as broken.
+from engine.paths import STATE_DIR as STATE  # noqa: E402
+
 ENDPOINT = STATE / "endpoint.json"
 
 PASS, FAIL = "  ok  ", " FAIL "

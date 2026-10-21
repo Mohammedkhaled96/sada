@@ -47,8 +47,10 @@ from engine.job import Cancelled, Progress, run_transcription
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-STATE_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sada"
-from engine.paths import OUT_DIR
+# One definition for both, from engine.paths. This file used to carry its
+# own copy of the state directory, which is how the endpoint file and the
+# settings file could disagree about where the program keeps its data.
+from engine.paths import OUT_DIR, STATE_DIR
 
 
 # --------------------------------------------------------------------------

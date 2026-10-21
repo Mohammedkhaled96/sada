@@ -1,7 +1,13 @@
-"""User settings, stored as JSON next to the rest of our state.
+"""User settings, stored as JSON beside the rest of the program's data.
 
 Every value has a default that works, so a missing or corrupt file never stops
 the app from starting - it falls back and rewrites a clean one.
+
+The location comes from engine.paths, so settings sit wherever models do:
+beside the project when run from a checkout, and under the user profile in
+an installed release. There is no second definition of it here - this file
+used to carry its own copy, which is how the project ended up with five
+definitions of where its data lives.
 """
 from __future__ import annotations
 
@@ -11,9 +17,17 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from app import i18n
+from engine import paths
 
-STATE_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Sada"
-SETTINGS_FILE = STATE_DIR / "settings.json"
+# Re-exported rather than redefined: tests replace these to write into a
+# temporary directory, and engine.paths is the single source of truth.
+STATE_DIR = paths.STATE_DIR
+SETTINGS_FILE = paths.SETTINGS_FILE
+
+# Where releases up to 1.0.1 kept the settings file. Read once, if the new
+# location has nothing, so moving the file does not silently reset a
+# configuration the user had already chosen.
+LEGACY_SETTINGS_FILE = paths.LEGACY_STATE_DIR / "settings.json"
 
 MODELS = ["turbo", "large-v3", "medium", "small"]
 DEVICES = ["auto", "cuda", "cpu"]
@@ -96,16 +110,42 @@ class Settings:
         return None if self.language == "auto" else self.language
 
 
+def _source_file() -> Path:
+    """The settings file to read.
+
+    The new location if it holds anything, otherwise the one releases up to
+    1.0.1 used. Without this, moving the file would quietly hand every
+    existing user a fresh set of defaults - their model, their shortcuts
+    and their language, all gone, with nothing to say why.
+    """
+    if SETTINGS_FILE.exists():
+        return SETTINGS_FILE
+    if LEGACY_SETTINGS_FILE != SETTINGS_FILE and LEGACY_SETTINGS_FILE.exists():
+        return LEGACY_SETTINGS_FILE
+    return SETTINGS_FILE
+
+
 def load() -> Settings:
     """Also applies the stored interface language, so every string produced
-    after this call is in the user's chosen language."""
+    after this call is in the user's chosen language.
+
+    Settings read from the old location are written straight back to the new
+    one. Without that, the folder cleanup that runs next at startup would
+    remove the only copy of them.
+    """
+    source = _source_file()
     try:
-        raw = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        raw = json.loads(source.read_text(encoding="utf-8"))
         known = {f.name for f in fields(Settings)}
         s = Settings(**{k: v for k, v in raw.items() if k in known}).validate()
     except Exception:
         s = Settings()
     i18n.set_language(s.ui_language)
+    if source != SETTINGS_FILE:
+        try:
+            save(s)
+        except OSError:
+            pass        # a read-only location; the settings still apply
     return s
 
 

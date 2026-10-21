@@ -4,6 +4,14 @@ __pycache__/
 
 # Model checkpoints: 461 MB to 2.9 GB each, fetched on demand.
 models/
+# One person's settings, now kept beside the project rather than under the
+# user profile. Never committed: it holds their shortcuts, their chosen
+# model and their interface language, and committing it would hand all of
+# that to everyone else who clones this - and overwrite theirs.
+settings.json
+settings.tmp
+# The daemon writes the port and token it is listening on.
+endpoint.json
 # Transcripts and checkpoints produced by a run.
 out/
 # Audio dropped in for the container to read.
