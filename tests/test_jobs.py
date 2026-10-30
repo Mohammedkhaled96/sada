@@ -29,6 +29,7 @@ import numpy as np
 
 from engine import models
 from engine.backends import MODEL_NAMES
+from app import config, i18n
 from app.jobs import JobManager
 from engine.chunking import SAMPLE_RATE, plan_chunks
 from engine.job import Progress
@@ -296,6 +297,33 @@ check("and does not call it a partial download", missing.partial is False)
 
 check("lists every offered model", len(models.all_info()) >= 4,
       ", ".join(m.checkpoint for m in models.all_info()))
+
+# Somebody opening Settings for the first time is looking at four checkpoints
+# between 461 MB and 2.9 GB with nothing to say which to pick. Exactly one of
+# them is marked, in both places a model can be chosen, from one definition -
+# two places saying different things would be worse than saying nothing.
+recommended = [m.key for m in models.all_info() if m.recommended]
+check("exactly one model is recommended", recommended == [models.RECOMMENDED],
+      str(recommended))
+check("and it is one that can actually be chosen",
+      models.RECOMMENDED in config.MODELS, models.RECOMMENDED)
+check("the recommendation is also what a fresh install starts on",
+      config.Settings().model == models.RECOMMENDED,
+      config.Settings().model)
+
+for _lang in ("en", "ar"):
+    i18n.set_language(_lang)
+    hint = i18n.t("model_recommended_hint")
+    marked = [l for l in config.model_labels() if hint in l]
+    check(f"the chooser marks it in {_lang}", len(marked) == 1,
+          "; ".join(marked) or "nothing marked")
+# An untranslated string here would still pass the test above, and an Arabic
+# interface would quietly say "(recommended)" in the middle of Arabic text.
+i18n.set_language("ar")
+check("and the arabic interface says it in arabic",
+      not i18n.t("model_recommended_hint").isascii(),
+      i18n.t("model_recommended_hint"))
+i18n.set_language("en")
 check("installed_keys never names a model that is absent",
       all((models.MODELS_DIR / f"{MODEL_NAMES[k][1]}.pt").exists()
           for k in models.installed_keys()),

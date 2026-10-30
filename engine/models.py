@@ -32,6 +32,12 @@ SIZES = {
     "large-v3-turbo": 1_617_941_637,
 }
 
+# The one to download when you have no reason to prefer another: as accurate as
+# large-v3 on most material, at half the size and several times the speed. It
+# is also the default in Settings, and defined once here so the list of model
+# files and the model chooser can never recommend two different things.
+RECOMMENDED = "turbo"
+
 
 def human(size: int) -> str:
     if size >= 1 << 30:
@@ -51,6 +57,10 @@ class ModelInfo:
     @property
     def size_text(self) -> str:
         return human(self.expected_size)
+
+    @property
+    def recommended(self) -> bool:
+        return self.key == RECOMMENDED
 
     @property
     def partial(self) -> bool:

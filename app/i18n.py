@@ -72,8 +72,10 @@ S: dict[str, tuple[str, str]] = {
     "app_name": ("Sada", "صدى"),
 
     # ---------------------------------------------------------------- models
-    "model_turbo": ("turbo - fast and accurate (recommended)",
-                    "turbo - سريع ودقيق (موصى به)"),
+    # No "(recommended)" here: it is appended by config.model_labels() from
+    # models.RECOMMENDED, so the chooser and the list of model files cannot
+    # end up recommending two different models.
+    "model_turbo": ("turbo - fast and accurate", "turbo - سريع ودقيق"),
     "model_large-v3": ("large-v3 - most accurate, slower",
                        "large-v3 - الأدق وأبطأ"),
     "model_medium": ("medium - middle ground", "medium - متوسط"),
@@ -181,6 +183,9 @@ S: dict[str, tuple[str, str]] = {
     "model_installed": ("installed", "مُنزَّل"),
     "model_not_installed": ("not installed", "غير مُنزَّل"),
     "model_partial": ("incomplete download", "تحميل غير مكتمل"),
+    # Appended to the model's name in the list, so a screen reader reads it as
+    # part of the row and does not have to be told which column to look in.
+    "model_recommended_hint": (" (recommended)", " (موصى به)"),
     "col_model": ("Model", "النموذج"),
     "col_size": ("Size", "الحجم"),
     "col_state": ("State", "الحالة"),

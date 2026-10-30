@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from app import i18n
-from engine import paths
+from engine import models, paths
 
 # Re-exported rather than redefined: tests replace these to write into a
 # temporary directory, and engine.paths is the single source of truth.
@@ -37,7 +37,10 @@ UI_LANGUAGES = i18n.UI_LANGUAGES
 
 
 def model_labels() -> list[str]:
-    return [i18n.t(f"model_{m}") for m in MODELS]
+    return [i18n.t(f"model_{m}")
+            + (i18n.t("model_recommended_hint") if m == models.RECOMMENDED
+               else "")
+            for m in MODELS]
 
 
 def device_labels() -> list[str]:

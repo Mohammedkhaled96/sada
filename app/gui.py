@@ -217,7 +217,7 @@ class SettingsDialog(wx.Dialog):
             mfbox, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
         _set_accessible_name(self.model_list, t("group_models"))
         for i, col in enumerate((t("col_model"), t("col_size"), t("col_state"))):
-            self.model_list.InsertColumn(i, col, width=[210, 110, 180][i])
+            self.model_list.InsertColumn(i, col, width=[290, 110, 180][i])
         self.model_list.SetMinSize((-1, 128))
         self.model_list.Bind(wx.EVT_LIST_ITEM_SELECTED,
                              lambda e: self._update_model_buttons())
@@ -330,8 +330,13 @@ class SettingsDialog(wx.Dialog):
             state = (t("model_installed") if m.installed
                      else t("model_partial") if m.partial
                      else t("model_not_installed"))
+            # The recommendation belongs on the name, not in a column of its
+            # own: this list is where a model is chosen for download, and a
+            # separate column would be one more thing to arrow across to find.
+            name = m.checkpoint + (t("model_recommended_hint")
+                                   if m.recommended else "")
             row = self.model_list.InsertItem(self.model_list.GetItemCount(),
-                                             m.checkpoint)
+                                             name)
             self.model_list.SetItem(row, 1, m.size_text)
             self.model_list.SetItem(row, 2, state)
             self._model_rows.append(m)
