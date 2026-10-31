@@ -78,7 +78,7 @@ def consent() -> dict[str, str]:
     return found
 
 
-def run(frame, device_index: int | None = None):
+def run(frame, device_index: int | None = None, ai=None):
     """Yield a Step at a time. Runs off the GUI thread - it records audio."""
     # -- 1. is there anything to record with -------------------------------
     try:
@@ -177,7 +177,26 @@ def run(frame, device_index: int | None = None):
     yield Step(t("chk_hotkey"), taken, wanted,
                t("chk_hotkey_fix", key=wanted))
 
-    # -- 9. is there somewhere to write ------------------------------------
+    # -- 9. is the language model reachable, if one is turned on ----------
+    # From what is on screen, not from what was last saved: somebody who has
+    # just pasted a key wants to know about that key, and making them save and
+    # reopen first would be the opposite of a diagnostic.
+    provider, key, model = ai or (frame.settings.dictation_ai,
+                                  frame.settings.dictation_ai_key,
+                                  frame.settings.dictation_ai_model)
+    if provider == "off":
+        yield Step(t("chk_ai"), None, t("chk_ai_off"))
+    else:
+        from engine import polish
+
+        polisher = polish.make(provider, key, model)
+        try:
+            model = polisher.check()
+            yield Step(t("chk_ai"), True, t("chk_ai_ok", model=model))
+        except Exception as exc:
+            yield Step(t("chk_ai"), False, "", t("chk_ai_fix", error=exc))
+
+    # -- 10. is there somewhere to write -----------------------------------
     from app import wordio
 
     try:

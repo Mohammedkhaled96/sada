@@ -30,10 +30,15 @@ SETTINGS_FILE = paths.SETTINGS_FILE
 LEGACY_SETTINGS_FILE = paths.LEGACY_STATE_DIR / "settings.json"
 
 MODELS = ["turbo", "large-v3", "medium", "small"]
+AI_PROVIDERS = ["off", "gemini"]
 DEVICES = ["auto", "cuda", "cpu"]
 INSERT_MODES = ["cursor", "end", "new"]
 LANGUAGES = ["auto", "ar", "en", "fr", "de", "es", "tr", "ur", "fa"]
 UI_LANGUAGES = i18n.UI_LANGUAGES
+
+
+def ai_labels() -> list[str]:
+    return [i18n.t(f"ai_{p}") for p in AI_PROVIDERS]
 
 
 def model_labels() -> list[str]:
@@ -83,6 +88,11 @@ class Settings:
     # one who knows which way, so they say it once instead of fixing it by
     # hand after every dictation.
     dictation_corrections: str = ""
+    # "off" or "gemini". Off means nothing this program does leaves the
+    # machine, which is the promise everything else here keeps.
+    dictation_ai: str = "off"
+    dictation_ai_key: str = ""
+    dictation_ai_model: str = "gemini-2.0-flash"
     dictation_device: str = ""              # empty means the system default
 
     # shortcuts
@@ -114,6 +124,8 @@ class Settings:
             self.language = "auto"
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
+        if self.dictation_ai not in AI_PROVIDERS:
+            self.dictation_ai = "off"
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
@@ -141,6 +153,52 @@ def _source_file() -> Path:
     return SETTINGS_FILE
 
 
+_DPAPI = "dpapi:"
+
+
+def protect(secret: str) -> str:
+    """Encrypt the API key for this Windows user before it is written down.
+
+    settings.json sits in the program folder and is ordinary readable text.
+    A key the user pastes in is theirs, costs money if it leaks, and would
+    otherwise be sitting in a file that anything on the machine can read.
+    DPAPI ties it to this user account, so a copy of the file is useless
+    elsewhere.
+    """
+    if not secret:
+        return ""
+    try:
+        import base64
+
+        import win32crypt
+
+        blob = win32crypt.CryptProtectData(secret.encode("utf-8"), "Sada",
+                                           None, None, None, 0)
+        return _DPAPI + base64.b64encode(blob).decode("ascii")
+    except Exception:
+        # Without DPAPI the choice is plain text or no feature at all. It is
+        # stored plainly and labelled as such rather than silently pretending.
+        return "plain:" + secret
+
+
+def unprotect(stored: str) -> str:
+    if not stored:
+        return ""
+    if stored.startswith("plain:"):
+        return stored[len("plain:"):]
+    if not stored.startswith(_DPAPI):
+        return stored               # written by hand, or by an older version
+    try:
+        import base64
+
+        import win32crypt
+
+        blob = base64.b64decode(stored[len(_DPAPI):])
+        return win32crypt.CryptUnprotectData(blob, None, None, None, 0)[1].decode("utf-8")
+    except Exception:
+        return ""
+
+
 def load() -> Settings:
     """Also applies the stored interface language, so every string produced
     after this call is in the user's chosen language.
@@ -154,6 +212,7 @@ def load() -> Settings:
         raw = json.loads(source.read_text(encoding="utf-8"))
         known = {f.name for f in fields(Settings)}
         s = Settings(**{k: v for k, v in raw.items() if k in known}).validate()
+        s.dictation_ai_key = unprotect(s.dictation_ai_key)
     except Exception:
         s = Settings()
     i18n.set_language(s.ui_language)
@@ -169,7 +228,9 @@ def save(s: Settings) -> Path:
     i18n.set_language(s.ui_language)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = SETTINGS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(asdict(s), ensure_ascii=False, indent=2),
+    stored = asdict(s)
+    stored["dictation_ai_key"] = protect(s.dictation_ai_key)
+    tmp.write_text(json.dumps(stored, ensure_ascii=False, indent=2),
                    encoding="utf-8")
     tmp.replace(SETTINGS_FILE)              # atomic, so a crash cannot truncate it
     return SETTINGS_FILE

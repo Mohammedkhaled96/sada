@@ -398,6 +398,33 @@ S: dict[str, tuple[str, str]] = {
                             "هذه الأصوات فقط، ككلمات كاملة. لا تُحذف أي كلمة "
                             "قلتها فعلًا."),
     "field_mic": ("Microphone:", "الميكروفون:"),
+    "field_ai": ("Repair with AI:", "الإصلاح بالذكاء الاصطناعي:"),
+    "ai_off": ("Off - nothing leaves this computer",
+               "مغلق - لا شيء يغادر هذا الجهاز"),
+    "ai_gemini": ("Google Gemini - needs a key and the internet",
+                  "جوجل Gemini - يحتاج مفتاحًا وإنترنت"),
+    "help_ai": ("Applies corrections you spoke out loud, repairs misheard "
+                "words, and writes emoji you asked for. It SENDS WHAT YOU "
+                "DICTATED to Google. Everything else in this program stays on "
+                "your computer; this does not.",
+                "يطبّق التصحيحات اللي قلتها بصوتك، ويصلّح الكلمات اللي "
+                "اتسمعت غلط، ويكتب الإيموجي اللي طلبته. وهو **يرسل ما أمليته** "
+                "إلى جوجل. كل شيء آخر في البرنامج يبقى على جهازك، إلا هذا."),
+    "field_ai_key": ("Gemini API key:", "مفتاح Gemini:"),
+    "help_ai_key": ("From aistudio.google.com. Stored encrypted for your "
+                    "Windows account, not as plain text.",
+                    "من aistudio.google.com. يُحفَظ مشفّرًا لحساب ويندوز "
+                    "الخاص بك، وليس كنص صريح."),
+    "chk_ai": ("AI repair", "الإصلاح بالذكاء الاصطناعي"),
+    "chk_ai_off": ("Off. The dictation is written exactly as it was heard.",
+                   "مغلق. يُكتب الإملاء كما سُمع تمامًا."),
+    "chk_ai_ok": ("Working, model {model}", "يعمل، النموذج {model}"),
+    "chk_ai_fix": ("The key was refused: {error}. Check it in Settings, or "
+                   "set AI repair to Off.",
+                   "رُفض المفتاح: {error}. راجعه في الإعدادات، أو اجعل "
+                   "الإصلاح بالذكاء الاصطناعي مغلقًا."),
+    "say_dictation_repaired": ("{words} words written and repaired.",
+                               "كُتبت {words} كلمة بعد الإصلاح."),
     "field_corrections": ("Always correct:", "تصحيحات دائمة:"),
     "help_corrections": ("One per line, wrong = right. Applied to dictation "
                          "exactly as written, whole words only.",
@@ -593,9 +620,17 @@ immediately and speech waits for the screen reader to be free.
 You can change language in the middle of a sentence. The program finds where
 one language stops and the next begins and writes each part in its own script,
 so Arabic stays in Arabic letters and English in Latin ones.
-What it does not do is rewrite what you said. Hesitation sounds are removed and
+On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
+If you want more than that, Settings has Repair with AI. Turned on, it applies
+corrections you spoke out loud - say "at six thirty, no, make it eight" and the
+text says eight - repairs words that were clearly misheard, and writes an emoji
+where you asked for one. It is off to begin with, and it is the only part of
+this program that sends anything anywhere: your dictation goes to Google, and
+it needs a key of yours from aistudio.google.com. If the reply comes back
+looking like a rewrite rather than a repair, it is thrown away and you get
+exactly what you said.
 If a name always comes out wrong, put it in Settings under Always correct, one
 per line, as wrong = right. Those replacements are applied exactly as written.
 If nothing is written, open Settings and press Check dictation. It records
@@ -670,8 +705,14 @@ carries on from where it stopped.
 فورًا بينما الكلام ينتظر فراغ قارئ الشاشة.
 تقدر تغيّر اللغة في نص الجملة. البرنامج يلاقي مكان تغيّر اللغة ويكتب كل جزء
 بحروفه، فالعربي يفضل عربي والإنجليزي يفضل لاتيني.
-واللي مابيعملهوش إنه يعيد صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي
-كرّرها النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
+ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
+النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
+ولو عايز أكتر من كده، في الإعدادات «الإصلاح بالذكاء الاصطناعي». لما تشغّله
+بيطبّق التصحيحات اللي قلتها بصوتك — تقول «الساعة ستة ونص، لا لا خليها تمانية»
+فيكتب تمانية — ويصلّح الكلمات اللي اتسمعت غلط، ويكتب الإيموجي اللي طلبته.
+وهو مقفول من الأول، وهو الجزء الوحيد في البرنامج اللي بيبعت أي حاجة لبرّه:
+الإملاء بتاعك بيروح لجوجل، وبيحتاج مفتاح بتاعك من aistudio.google.com. ولو
+الرد رجع شكله إعادة كتابة مش إصلاح، بيتترمي وبتاخد اللي قلته بالظبط.
 ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
 كل سطر بالشكل: الخطأ = الصواب. التصحيحات دي بتتطبّق حرفيًا زي ما كتبتها.
 وإذا لم يُكتب شيء، افتح الإعدادات واضغط «فحص الإملاء». يسجّل ثلاث ثوانٍ،

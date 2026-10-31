@@ -322,7 +322,64 @@ second segment in an 8-second window, which measures **2.8 s**.
 Stages 1-3 are tested without a GUI and without a microphone, from recorded
 files — which is how this was verified rather than demonstrated.
 
-## 11. What we are not doing, and why
+## 11. Repair with a language model — added later, off by default
+
+The rule in §1 was "we transcribe what was said, we do not improve it", and it
+held until the user asked for the opposite with a concrete example: they said
+"الساعة ستة ونص… لا لا، خليها ساعة تمانية" and wanted the text to say eight.
+That is not something rules can do. It needs a model that understands the
+sentence. Asked again after the objection was made, so it is built — under
+guard, and off unless switched on.
+
+### Which model, and why that one
+
+A local model was the first choice and is still the better one. It is not
+possible on this network. Measured, not assumed:
+
+| Host | |
+|---|---|
+| huggingface.co | TLS-blocked |
+| ollama.com, registry.ollama.ai | TLS-blocked |
+| api.openai.com, openrouter.ai | TLS-blocked |
+| github.com, pypi.org | reachable |
+| **generativelanguage.googleapis.com** | **reachable** |
+
+And `llama-cpp-python` publishes no Windows wheel — PyPI carries the source
+only, so the runtime would have to be compiled as well as the weights fetched
+from a host that does not answer. So the one language model that can actually
+run from this machine is Google's, with a key the user supplies.
+`engine/polish.py` is written so that a local model is a second class in the
+same file if a weights file ever arrives by hand.
+
+### What it may do, and what happens when it does something else
+
+Allowed: apply a correction the speaker made out loud, punctuate, write an
+emoji the speaker asked for, and repair words the recogniser clearly misheard
+— which matters most in dialect, where Whisper is weakest and where the
+example above came from.
+
+Not allowed: answering, summarising, translating, adding anything, changing
+the language or the script.
+
+The result is **checked, not trusted**. If it grew or shrank beyond what a
+repair explains, or the dominant script flipped, or it opens like an assistant
+answering a question, the original is kept and the user hears the ordinary
+"done" rather than "repaired". Emoji are credited against the length check,
+because one character standing in for four spoken words is a legitimate
+shrink — and that credit is capped so emoji cannot smuggle a rewrite past it.
+
+`tests/test_polish.py` is almost entirely about the refusals. The model writes
+into a document the user cannot see: wrongly keeping the original costs them a
+comma, wrongly accepting a rewrite puts words in their document they never
+said.
+
+### Privacy, stated plainly
+
+This is the only thing in the program that leaves the machine. It is off in a
+fresh install, the setting says so in both languages, and the key is encrypted
+with DPAPI for the Windows account rather than left in `settings.json` as text.
+
+## 12. What we are not doing, and why
 
 - **No cloud engine.** Offline is the product. Gemini was tried: no keyless
   access, rate limits on the key rather than the model, and 16 s of Arabic
@@ -331,7 +388,7 @@ files — which is how this was verified rather than demonstrated.
 - **No progressive insertion into Word.** `docs/accessibility.md`.
 - **No second text model** unless stage 0 fails, in which case `small`.
 
-## 12. The larger prize, out of scope here
+## 13. The larger prize, out of scope here
 
 CTranslate2 int8 is measured in `docs/accuracy-notes.md` at 3-5x realtime
 against the 0.65x we get today, and it would speed up **file transcription**,

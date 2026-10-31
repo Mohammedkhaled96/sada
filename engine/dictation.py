@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from engine import cleanup, fillers, langmap, window
+from engine.polish import NullPolisher
 from engine.window import short_window
 
 SAMPLE_RATE = 16000
@@ -240,6 +241,7 @@ class Dictation:
                  language: str | None = None,
                  hotwords: str | None = None,
                  corrections: str | None = None,
+                 polisher=None,
                  max_total_s: float = MAX_TOTAL_S):
         self.backend = backend
         # Whether language detection is cheap enough to do per segment.
@@ -250,7 +252,10 @@ class Dictation:
         self.forced_language = language or None
         self.hotwords = (hotwords or "").strip() or None
         self.corrections = cleanup.parse_corrections(corrections or "")
+        self.polisher = polisher or NullPolisher()
         self._written = ""
+        self.polished = False
+        self.polish_note = ""
         self.max_total_s = max_total_s
 
         self.segmenter = Segmenter()
@@ -299,10 +304,17 @@ class Dictation:
         with self._lock:
             parts = [self._texts[i] for i in sorted(self._texts) if self._texts[i]]
             language = _majority(self._languages)
-            # The user's own replacements go on at the end, over the whole
-            # text, so one that spans a segment boundary still matches.
-            text = cleanup.apply_corrections(" ".join(parts).strip(),
-                                             self.corrections)
+            text = " ".join(parts).strip()
+
+        # Outside the lock: this one can reach the network, and holding the
+        # lock across it would block every worker thread behind it.
+        polished = self._polish(text, language)
+
+        with self._lock:
+            # The user's own replacements go on last, over the whole text, so
+            # one that spans a segment boundary still matches - and so that a
+            # replacement they wrote always beats whatever the model decided.
+            text = cleanup.apply_corrections(polished, self.corrections)
             result = Result(
                 text=text,
                 language=language,
@@ -315,6 +327,24 @@ class Dictation:
             )
         self.on_state("done", result=result)
         return result
+
+    def _polish(self, text: str, language: str) -> str:
+        """Hand the finished text to the language model, if one is turned on.
+
+        Never fatal. A dictation that could not be repaired is a dictation
+        written exactly as it was heard, which is the behaviour with this
+        turned off - the state it ships in.
+        """
+        if not text or not getattr(self.polisher, "available", False):
+            return text
+        try:
+            result = self.polisher.polish(text, language)
+        except Exception as exc:
+            self.polish_note = str(exc)
+            return text
+        self.polish_note = result.reason
+        self.polished = result.changed
+        return result.text
 
     # -- the work ----------------------------------------------------------
     def _submit(self, segment: np.ndarray) -> None:
