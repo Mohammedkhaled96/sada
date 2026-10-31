@@ -109,19 +109,17 @@ check("and the same the other way round", result.text == english,
 # --------------------------------------------------------------- when it is off
 print("\n--- off is the default, and off means off ---")
 
-check("the default provider does nothing",
-      polish.make("local").polish(SPOKEN).text == SPOKEN)
-check("and reports itself unavailable", not polish.make("local").available)
-# "gemini" means Google heard the audio. Running the repairer over that
-# model's own output would be a second chance to drift, for nothing.
-check("nothing polishes what Google already transcribed",
-      not polish.make("gemini", "key").available)
+check("the local-only provider does nothing",
+      polish.make("local", "key").polish(SPOKEN).text == SPOKEN)
+check("and reports itself unavailable", not polish.make("local", "key").available)
+check("automatic with no key does nothing either",
+      not polish.make("auto", "").available)
 check("a provider with no key is unavailable",
       not polish.GeminiPolisher("").available)
 check("and returns the text untouched",
       polish.GeminiPolisher("").polish(SPOKEN).text == SPOKEN)
-check("a fresh install writes on this computer",
-      config.Settings().dictation_ai == "local")
+check("a fresh install is automatic",
+      config.Settings().dictation_ai == "auto")
 check("because this is the only thing here that leaves the machine",
       "generativelanguage.googleapis.com" in polish.ENDPOINT)
 

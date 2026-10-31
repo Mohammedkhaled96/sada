@@ -342,6 +342,10 @@ class Dictation:
         """
         if not text or not getattr(self.polisher, "available", False):
             return text
+        if getattr(self.cloud, "available", False) and not self.fell_back:
+            # Google heard the audio and wrote this. Running the same model
+            # over its own transcript is a second chance to drift for nothing.
+            return text
         try:
             result = self.polisher.polish(text, language)
         except Exception as exc:

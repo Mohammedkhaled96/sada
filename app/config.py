@@ -31,11 +31,12 @@ LEGACY_SETTINGS_FILE = paths.LEGACY_STATE_DIR / "settings.json"
 
 MODELS = ["turbo", "large-v3", "medium", "small"]
 # What writes the dictation down.
-#   local  - Whisper on this machine. Nothing leaves it. The default.
-#   repair - Whisper writes it, then Google repairs the text.
-#   gemini - Google hears the audio itself. Much better on spoken Arabic,
-#            and the audio leaves the machine.
-AI_PROVIDERS = ["local", "repair", "gemini"]
+#   auto  - Google if there is a key that works, this machine otherwise. The
+#           choice is made per dictation, so an expired key, a dead connection
+#           or a refused reply falls through to the local model instead of
+#           failing. This is the default.
+#   local - never Google, whatever key is saved. Nothing leaves the machine.
+AI_PROVIDERS = ["auto", "local"]
 DEVICES = ["auto", "cuda", "cpu"]
 INSERT_MODES = ["cursor", "end", "new"]
 LANGUAGES = ["auto", "ar", "en", "fr", "de", "es", "tr", "ur", "fa"]
@@ -87,17 +88,23 @@ class Settings:
     save_side_files: bool = True
 
     # dictation
-    dictation_remove_fillers: bool = True
     # One replacement per line, "wrong = right". A speech model mishears a
     # particular name the same way every time, and the person dictating is the
     # one who knows which way, so they say it once instead of fixing it by
     # hand after every dictation.
     dictation_corrections: str = ""
-    # See AI_PROVIDERS. "local" means nothing this program does leaves the
-    # machine, which is the promise everything else here keeps.
-    dictation_ai: str = "local"
+    # See AI_PROVIDERS.
+    dictation_ai: str = "auto"
+    # Kept in this file as written, so it can be edited here as well as in
+    # Settings. That is a deliberate trade and it is the user's: a key that is
+    # readable is a key they can move, copy and replace, and this file sits in
+    # the program's own folder rather than anywhere shared.
     dictation_ai_key: str = ""
-    dictation_ai_model: str = "gemini-2.0-flash"
+    # Empty means "ask Google which models exist and pick one". Hardcoding a
+    # name is what broke this the first time: gemini-2.0-flash stopped being
+    # offered, and every request came back 404 while the key was perfectly
+    # good. The name that is found is written back here as a cache.
+    dictation_ai_model: str = ""
     dictation_device: str = ""              # empty means the system default
 
     # shortcuts
@@ -130,7 +137,16 @@ class Settings:
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
         if self.dictation_ai not in AI_PROVIDERS:
-            self.dictation_ai = "local"
+            self.dictation_ai = "auto"
+        # A cached model name that is no longer one we would choose is cleared
+        # rather than kept. Google withdraws names, and a stale one in this
+        # file would 404 on every request for ever - which looks to the user
+        # exactly like their key being refused.
+        if self.dictation_ai_model:
+            from engine.cloudstt import CANDIDATES
+
+            if self.dictation_ai_model not in CANDIDATES:
+                self.dictation_ai_model = ""
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
@@ -217,7 +233,7 @@ def load() -> Settings:
         raw = json.loads(source.read_text(encoding="utf-8"))
         known = {f.name for f in fields(Settings)}
         s = Settings(**{k: v for k, v in raw.items() if k in known}).validate()
-        s.dictation_ai_key = unprotect(s.dictation_ai_key)
+        s.dictation_ai_key = unprotect(s.dictation_ai_key)   # from older files
     except Exception:
         s = Settings()
     i18n.set_language(s.ui_language)
@@ -233,9 +249,7 @@ def save(s: Settings) -> Path:
     i18n.set_language(s.ui_language)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = SETTINGS_FILE.with_suffix(".tmp")
-    stored = asdict(s)
-    stored["dictation_ai_key"] = protect(s.dictation_ai_key)
-    tmp.write_text(json.dumps(stored, ensure_ascii=False, indent=2),
+    tmp.write_text(json.dumps(asdict(s), ensure_ascii=False, indent=2),
                    encoding="utf-8")
     tmp.replace(SETTINGS_FILE)              # atomic, so a crash cannot truncate it
     return SETTINGS_FILE

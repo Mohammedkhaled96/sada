@@ -212,17 +212,15 @@ class SettingsDialog(wx.Dialog):
         self.ai_key = wx.TextCtrl(dicbox, value=settings.dictation_ai_key,
                                   style=wx.TE_PASSWORD)
         _row(g4, dicbox, t("field_ai_key"), self.ai_key, t("help_ai_key"))
+        self.show_key = wx.CheckBox(dicbox, label=t("check_show_key"))
+        self.show_key.Bind(wx.EVT_CHECKBOX, self.on_show_key)
+        _row(g4, dicbox, "", self.show_key)
         self.corrections = wx.TextCtrl(
             dicbox, value=settings.dictation_corrections,
             style=wx.TE_MULTILINE, size=(-1, 70))
         _row(g4, dicbox, t("field_corrections"), self.corrections,
              t("help_corrections"))
         dic.Add(g4, 0, wx.EXPAND | wx.ALL, PAD)
-
-        self.remove_fillers = wx.CheckBox(dicbox, label=t("check_remove_fillers"))
-        self.remove_fillers.SetValue(settings.dictation_remove_fillers)
-        dic.Add(self.remove_fillers, 0, wx.LEFT | wx.RIGHT, PAD)
-        _hint(dic, dicbox, t("help_remove_fillers"))
 
         self.btn_check = wx.Button(dicbox, label=t("btn_dictation_check"))
         self.btn_check.Bind(wx.EVT_BUTTON, self.on_dictation_check)
@@ -383,7 +381,6 @@ class SettingsDialog(wx.Dialog):
         s.timestamps = self.timestamps.GetValue()
         s.rtl_auto = self.rtl_auto.GetValue()
         s.save_side_files = self.side_files.GetValue()
-        s.dictation_remove_fillers = self.remove_fillers.GetValue()
         s.dictation_corrections = self.corrections.GetValue().strip()
         s.dictation_ai = AI_PROVIDERS[self.ai.GetSelection()]
         s.dictation_ai_key = self.ai_key.GetValue().strip()
@@ -399,6 +396,25 @@ class SettingsDialog(wx.Dialog):
         config.save(s)              # also switches the active language
         self.EndModal(wx.ID_OK)
 
+
+    def on_show_key(self, _evt) -> None:
+        """Swap the key field between hidden and readable.
+
+        wx cannot turn TE_PASSWORD off on an existing control, so the field is
+        rebuilt in place. Worth it: a key that can never be read back cannot be
+        checked for a typo, which is the commonest reason one does not work.
+        """
+        value = self.ai_key.GetValue()
+        parent, sizer = self.ai_key.GetParent(), self.ai_key.GetContainingSizer()
+        style = 0 if self.show_key.GetValue() else wx.TE_PASSWORD
+        replacement = wx.TextCtrl(parent, value=value, style=style)
+        _set_accessible_name(replacement, t("field_ai_key").rstrip(":"))
+        replacement.SetHelpText(t("help_ai_key"))
+        sizer.Replace(self.ai_key, replacement)
+        self.ai_key.Destroy()
+        self.ai_key = replacement
+        sizer.Layout()
+        self.ai_key.SetFocus()
 
     # ------------------------------------------------------ dictation check
     def on_dictation_check(self, _evt) -> None:
@@ -666,7 +682,6 @@ class SettingsDialog(wx.Dialog):
         self.k_cancel.SetValue(d.hotkey_cancel)
         self.k_dictate.SetValue(d.hotkey_dictate)
         self.mic.SetSelection(0)
-        self.remove_fillers.SetValue(d.dictation_remove_fillers)
         self.corrections.SetValue(d.dictation_corrections)
         self.ai.SetSelection(AI_PROVIDERS.index(d.dictation_ai))
         # The key is not cleared. Reset puts the settings back; it is not a

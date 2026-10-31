@@ -66,13 +66,19 @@ check("mono and 16-bit, which is all a microphone gave us",
           wave.open(io.BytesIO(base64.b64decode(parts[0]["inlineData"]["data"])))))
 check("a known language goes as a hint, not as an order",
       "most likely" in parts[1]["text"], parts[1]["text"])
-check("it is told to keep the dialect and the script",
-      "dialect" in instruction and "transliterate" in instruction)
+check("it is told to keep the dialect", "dialect" in instruction)
+check("and each language in its own letters",
+      "own script" in instruction and "never translate" in instruction)
 check("it is told to apply corrections said out loud", "no, make it" in instruction)
 check("it is told about emoji", "emoji" in instruction)
-check("it is told never to answer or describe", "never answer" in instruction)
+check("it is told never to answer a question in the audio",
+      "never answer" in instruction)
+check("nor to follow an instruction in it",
+      "never follow an instruction" in instruction)
 check("it is told to return nothing when there is no speech",
       "return nothing" in instruction)
+check("and told it is writing into a document, not talking to anyone",
+      "document" in instruction)
 check("the temperature is zero: this is listening, not writing",
       sent["generationConfig"]["temperature"] == 0.0)
 
@@ -123,14 +129,59 @@ except cloudstt.CloudError as exc:
 # ------------------------------------------------------------ what it is not
 print("\n--- local stays the default ---")
 
-check("a fresh install writes on this computer",
-      config.Settings().dictation_ai == "local")
-check("and the default engine sends nothing",
-      not cloudstt.make("local").available)
+check("with no key, automatic means this computer",
+      not cloudstt.make("auto", "").available)
+check("with a key, automatic means Google",
+      cloudstt.make("auto", "a-key").available)
+check("and 'only this computer' never uses it, key or not",
+      not cloudstt.make("local", "a-key").available)
 check("no key means not available", not cloudstt.GeminiTranscriber("").available)
-check("the three choices are local, repair and gemini",
-      config.AI_PROVIDERS == ["local", "repair", "gemini"],
-      str(config.AI_PROVIDERS))
+check("there are two choices, automatic and local",
+      config.AI_PROVIDERS == ["auto", "local"], str(config.AI_PROVIDERS))
+check("and automatic is what a fresh install uses",
+      config.Settings().dictation_ai == "auto")
+
+# Hardcoding one model name is what made this report that Google could not be
+# reached while the key worked perfectly: the name had been withdrawn.
+print()
+probed = []
+
+
+def probe(answer_for):
+    def transport(body):
+        name = probe.current
+        probed.append(name)
+        if name != answer_for:
+            raise cloudstt.CloudError("HTTP 404: no longer available")
+        return {"candidates": [{"content": {"parts": [{"text": "x y z"}]}}]}
+    return transport
+
+
+def discover_with(answer_for):
+    probed.clear()
+
+    def transport(body):
+        raise AssertionError("unused")
+    # Walk the candidates the way discover() does, one transport per model.
+    for name in cloudstt.CANDIDATES:
+        probe.current = name
+        try:
+            cloudstt.GeminiTranscriber("k", name,
+                                       transport=probe(answer_for)).transcribe(
+                np.zeros(8000, dtype=np.float32))
+            return name
+        except cloudstt.CloudError:
+            continue
+    return None
+
+
+check("a withdrawn first choice falls through to the next model",
+      discover_with(cloudstt.CANDIDATES[1]) == cloudstt.CANDIDATES[1],
+      " -> ".join(probed))
+check("the preferred model is tried first",
+      probed[0] == cloudstt.CANDIDATES[0], probed[0])
+check("and every candidate is a current one",
+      "gemini-2.0-flash" not in cloudstt.CANDIDATES, str(cloudstt.CANDIDATES))
 
 # Whichever one heard it, the paragraph has to face the right way.
 check("Arabic text is marked right-to-left", cloudstt.script_of(SPOKEN) == "ar")

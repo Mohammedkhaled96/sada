@@ -390,35 +390,32 @@ S: dict[str, tuple[str, str]] = {
 
     # ------------------------------------------------------- dictation check
     "group_dictation": ("Dictation", "الإملاء"),
-    "check_remove_fillers": ("Remove hesitation sounds such as um and أمم",
-                             "حذف أصوات التردد مثل um و أمم"),
-    "help_remove_fillers": ("Only those sounds, matched whole. No word you "
-                            "actually said is removed.",
-                            "هذه الأصوات فقط، ككلمات كاملة. لا تُحذف أي كلمة "
-                            "قلتها فعلًا."),
+    "check_show_key": ("Show the key", "إظهار المفتاح"),
     "field_mic": ("Microphone:", "الميكروفون:"),
     "field_ai": ("Dictation engine:", "محرّك الإملاء:"),
-    "ai_local": ("On this computer - nothing is sent anywhere",
-                 "على هذا الجهاز - لا يُرسل أي شيء لأي مكان"),
-    "ai_repair": ("On this computer, then Google repairs the text",
-                  "على هذا الجهاز، ثم جوجل يصلّح النص"),
-    "ai_gemini": ("Google hears the audio - best for spoken Arabic",
-                  "جوجل يسمع الصوت - الأفضل للعربية المحكية"),
-    "help_ai": ("On this computer is the default and sends nothing anywhere. "
-                "The other two SEND YOUR DICTATION to Google and need a key "
-                "and a connection. Google hears the audio is much better at "
-                "Egyptian and other spoken Arabic, where the local model is "
-                "weakest. If Google fails, the local model writes it instead.",
-                "«على هذا الجهاز» هو الافتراضي ولا يرسل أي شيء لأي مكان. "
-                "الخياران الآخران **يرسلان ما تمليه** إلى جوجل ويحتاجان "
-                "مفتاحًا واتصالًا. و«جوجل يسمع الصوت» أفضل بكثير في العامية "
-                "المصرية والعربية المحكية، وهي أضعف نقطة في النموذج المحلي. "
-                "ولو فشل جوجل، يكتبها النموذج المحلي بدلًا منه."),
+    "ai_auto": ("Automatic - Google when the key works, this computer otherwise",
+                "تلقائي - جوجل عندما يعمل المفتاح، وهذا الجهاز عدا ذلك"),
+    "ai_local": ("Only this computer - nothing is sent anywhere",
+                 "هذا الجهاز فقط - لا يُرسل أي شيء لأي مكان"),
+    "help_ai": ("Automatic uses Google whenever the key below works, because "
+                "it is far better at spoken Arabic and at any language you "
+                "mix in - and it SENDS YOUR DICTATION to Google. With no key, "
+                "an expired key or no connection, this computer writes it "
+                "instead, every time, without you doing anything. Only this "
+                "computer never sends anything, whatever key is saved.",
+                "«تلقائي» يستخدم جوجل طول ما المفتاح تحت شغّال، لأنه أفضل "
+                "بكثير في العربية المحكية وفي أي لغة تخلطها - وهو **يرسل ما "
+                "تمليه** إلى جوجل. ولو مافيش مفتاح، أو المفتاح انتهى، أو "
+                "مافيش نت، الجهاز ده بيكتبها بدله في كل مرة من غير ما تعمل "
+                "أي حاجة. و«هذا الجهاز فقط» مابيبعتش حاجة خالص مهما كان "
+                "المفتاح محفوظ."),
     "field_ai_key": ("Gemini API key:", "مفتاح Gemini:"),
-    "help_ai_key": ("From aistudio.google.com. Stored encrypted for your "
-                    "Windows account, not as plain text.",
-                    "من aistudio.google.com. يُحفَظ مشفّرًا لحساب ويندوز "
-                    "الخاص بك، وليس كنص صريح."),
+    "help_ai_key": ("From aistudio.google.com, starting with AIza. Saved in "
+                    "settings.json in the program folder, so you can edit it "
+                    "there too.",
+                    "من aistudio.google.com، ويبدأ بـ AIza. يُحفَظ في ملف "
+                    "settings.json في مجلد البرنامج، فتقدر تعدّله من هناك "
+                    "كمان."),
     "chk_ai": ("Dictation engine", "محرّك الإملاء"),
     "chk_ai_off": ("On this computer. Nothing is sent anywhere.",
                    "على هذا الجهاز. لا يُرسل أي شيء لأي مكان."),
@@ -635,23 +632,18 @@ engine on this computer writes a whole dictation in one language.
 On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
-Settings has a Dictation engine with three choices. On this computer is the
-default and sends nothing anywhere. The other two need a key of yours from
-aistudio.google.com, and they are the only part of this program that sends
-anything out.
-Google hears the audio is the one to pick for spoken Arabic. The local model
-learnt mostly written Arabic, so a dictated Egyptian sentence comes back part
-wrong - and once a word has been misheard, nothing can put it back. A model
-that hears the recording itself can. It also applies corrections you say out
-loud: "at six thirty, no, make it eight" is written as eight. And it writes an
-emoji where you ask for one - though so does the local engine, so that part
-works with no key and no connection.
-On this computer, then Google repairs the text keeps the audio here and sends
-only the words, which is less private than the first and more private than the
-second.
-Whichever you choose, if Google cannot be reached the local model writes it
-instead and says so, and a reply that looks like a rewrite rather than a
-transcript is thrown away.
+Settings has a Dictation engine, set to Automatic. With a Google key saved it
+uses Google, which is far better at spoken Arabic and at any language you mix
+in - and it sends your dictation to Google. With no key, an expired key or no
+connection it writes on this computer instead, every time, without you doing
+anything. Set it to Only this computer and it never sends anything at all.
+The key comes from aistudio.google.com and starts with AIza. Paste it into
+Settings, or edit settings.json in the program folder. Show the key beside the
+box lets you read it back to check it.
+Google also applies corrections you say out loud: "at six thirty, no, make it
+eight" is written as eight. If Google cannot be reached the local model writes
+it and the program says so, and a reply that looks like a rewrite rather than
+a transcript is thrown away.
 If a name always comes out wrong, put it in Settings under Always correct, one
 per line, as wrong = right. Those replacements are applied exactly as written.
 If nothing is written, open Settings and press Check dictation. It records
@@ -732,18 +724,17 @@ carries on from where it stopped.
 كله بلغة واحدة.
 ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
 النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
-في الإعدادات «محرّك الإملاء» وفيه ثلاث اختيارات. «على هذا الجهاز» هو
-الافتراضي وما بيبعتش أي حاجة لأي مكان. والاتنين التانيين محتاجين مفتاح بتاعك
-من aistudio.google.com، وهما الجزء الوحيد في البرنامج اللي بيبعت حاجة لبرّه.
-«جوجل يسمع الصوت» هو اللي تختاره للعربي المحكي. النموذج المحلي اتعلّم عربي
-مكتوب في الأغلب، فالجملة المصرية بترجع ناقصة — ولما الكلمة تتسمع غلط مافيش
-حاجة بترجّعها. النموذج اللي بيسمع التسجيل نفسه يقدر. وهو كمان بيطبّق التصحيحات
-اللي بتقولها بصوتك: «الساعة ستة ونص، لا لا خليها تمانية» تتكتب تمانية. وبيكتب
-الإيموجي اللي بتطلبه — بس ده المحرّك المحلي بيعمله كمان، من غير مفتاح ولا نت.
-و«على هذا الجهاز ثم جوجل يصلّح النص» بيخلّي الصوت عندك ويبعت الكلام بس، يعني
-خصوصية أقل من الأول وأكتر من التاني.
-وأيًا كان اختيارك: لو جوجل ماردّش، النموذج المحلي بيكتبها ويقول لك، والرد اللي
-شكله إعادة كتابة مش تفريغ بيتترمي.
+في الإعدادات «محرّك الإملاء» ومضبوط على «تلقائي». لو في مفتاح جوجل محفوظ
+بيستخدم جوجل، وهو أفضل بكثير في العربي المحكي وفي أي لغة تخلطها — وبيبعت
+إملاءك لجوجل. ولو مافيش مفتاح، أو المفتاح انتهى، أو مافيش نت، بيكتب على
+الجهاز ده في كل مرة من غير ما تعمل حاجة. ولو خليته «هذا الجهاز فقط» مابيبعتش
+أي حاجة خالص.
+المفتاح من aistudio.google.com وبيبدأ بـ AIza. الزقه في الإعدادات، أو عدّله
+في ملف settings.json في مجلد البرنامج. و«إظهار المفتاح» جنب الخانة بيخليك
+تقراه عشان تتأكد منه.
+وجوجل كمان بيطبّق التصحيحات اللي بتقولها بصوتك: «الساعة ستة ونص، لا لا خليها
+تمانية» تتكتب تمانية. ولو جوجل ماردّش، النموذج المحلي بيكتبها والبرنامج بيقول
+لك، والرد اللي شكله إعادة كتابة مش تفريغ بيتترمي.
 ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
 كل سطر بالشكل: الخطأ = الصواب. التصحيحات دي بتتطبّق حرفيًا زي ما كتبتها.
 وإذا لم يُكتب شيء، افتح الإعدادات واضغط «فحص الإملاء». يسجّل ثلاث ثوانٍ،

@@ -18,7 +18,7 @@ import time
 import numpy as np
 import wx
 
-from app import wordio
+from app import config, wordio
 from app.i18n import t
 from engine import cloudstt, mic, polish
 from engine.dictation import SAMPLE_RATE, Dictation, Result
@@ -57,6 +57,50 @@ class DictationController:
         self._abandoned = False
         self.last_result: Result | None = None
 
+    def _forget_model_if_gone(self, note: str) -> None:
+        """Drop the cached model name when Google says it is not there.
+
+        Withdrawn names are the one failure that never recovers on its own:
+        every later dictation would 404 against the same stale entry. A
+        network blip, a rate limit or a refused reply is not this, and must
+        not throw away a model that works.
+        """
+        if not any(sign in note for sign in ("404", "no longer available",
+                                             "not found", "NOT_FOUND")):
+            return
+        settings = self.frame.settings
+        if not settings.dictation_ai_model:
+            return
+        settings.dictation_ai_model = ""
+        try:
+            config.save(settings)
+        except Exception:
+            pass
+
+    def _settle_model(self, settings) -> str:
+        """The Gemini model to use, found once and remembered.
+
+        Google withdraws model names, and its own list still advertises ones
+        that answer "no longer available" or never answer at all - which is
+        exactly how this came to report that Google could not be reached while
+        the key was perfectly good. So the name is probed and then written back
+        to settings, and nothing probes again until that one stops working.
+        """
+        if settings.dictation_ai != "auto" or not settings.dictation_ai_key:
+            return settings.dictation_ai_model
+        if settings.dictation_ai_model:
+            return settings.dictation_ai_model
+        try:
+            found = cloudstt.discover(settings.dictation_ai_key)
+        except Exception:
+            return ""           # the check will say why; dictation falls back
+        settings.dictation_ai_model = found
+        try:
+            config.save(settings)
+        except Exception:
+            pass                # remembering it is an optimisation, not a need
+        return found
+
     def preload(self) -> None:
         """Load what dictation needs before it is asked for.
 
@@ -66,6 +110,7 @@ class DictationController:
         looks frozen at the exact moment the user has started talking.
         """
         self._language_backend()
+        self._settle_model(self.frame.settings)
 
     @property
     def recording(self) -> bool:
@@ -118,7 +163,6 @@ class DictationController:
             self.frame.backend,
             lid_backend=self._language_backend(),
             on_state=self._on_state,
-            remove_fillers=settings.dictation_remove_fillers,
             language=None if settings.language == "auto" else settings.language,
             hotwords=settings.hotwords,
             corrections=settings.dictation_corrections,
@@ -127,7 +171,7 @@ class DictationController:
                                  settings.dictation_ai_model),
             cloud=cloudstt.make(settings.dictation_ai,
                                 settings.dictation_ai_key,
-                                settings.dictation_ai_model),
+                                self._settle_model(settings)),
         )
         self._stop.clear()
         self._abandoned = False
@@ -241,6 +285,7 @@ class DictationController:
         # the words in their document are not only the ones they spoke.
         session = self.session
         if session is not None and getattr(session, "fell_back", False):
+            self._forget_model_if_gone(getattr(session, "cloud_note", ""))
             # Not silently: the user chose Google, and what they got was the
             # local model. They should know which one wrote their document.
             said = "say_dictation_fellback"

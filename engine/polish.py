@@ -36,7 +36,9 @@ from dataclasses import dataclass
 
 ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
             "{model}:generateContent")
-DEFAULT_MODEL = "gemini-2.0-flash"
+from engine.cloudstt import CANDIDATES
+
+DEFAULT_MODEL = CANDIDATES[0]
 TIMEOUT_S = 20
 
 # A repair stays about the same size. Far outside this band the model has
@@ -151,10 +153,10 @@ class GeminiPolisher:
 
     name = "gemini"
 
-    def __init__(self, api_key: str, model: str = DEFAULT_MODEL,
+    def __init__(self, api_key: str, model: str = "",
                  timeout: float = TIMEOUT_S, transport=None):
         self.api_key = (api_key or "").strip()
-        self.model = model or DEFAULT_MODEL
+        self.model = (model or "").strip() or DEFAULT_MODEL
         self.timeout = timeout
         # Swapped out in tests. Nothing here should need the network to be
         # exercised - the guard above is the part that matters most, and it
@@ -225,10 +227,14 @@ def _first_text(reply: dict) -> str | None:
     return None
 
 
-def make(kind: str, api_key: str = "", model: str = DEFAULT_MODEL):
-    # Only "repair" polishes text. With "gemini" the same model already heard
-    # the audio, so running it over its own output would be a second chance to
-    # drift with nothing gained.
-    if kind == "repair":
+def make(kind: str, api_key: str = "", model: str = ""):
+    """A polisher for the text the *local* model produced.
+
+    In "auto" this only ever runs when Google could not hear the audio and the
+    local model wrote the dictation instead - engine/dictation.py asks for it
+    only on that path. Repairing a transcript Google itself produced would be
+    a second chance for the same model to drift, for nothing.
+    """
+    if kind == "auto" and (api_key or "").strip():
         return GeminiPolisher(api_key, model)
     return NullPolisher()
