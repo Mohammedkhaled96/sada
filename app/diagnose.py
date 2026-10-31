@@ -184,20 +184,7 @@ def run(frame, device_index: int | None = None):
     yield Step(t("chk_hotkey"), taken, wanted,
                t("chk_hotkey_fix", key=wanted))
 
-    # -- 9. is there a model to tidy the text with -------------------------
-    if not frame.settings.refine_text:
-        yield Step(t("chk_refine"), None, t("chk_refine_none"))
-    else:
-        from engine import refine
-
-        refiner = refine.make(True)
-        if getattr(refiner, "available", False):
-            yield Step(t("chk_refine"), True,
-                       t("chk_refine_ok", model=refiner.model))
-        else:
-            yield Step(t("chk_refine"), None, t("chk_refine_none"))
-
-    # -- 10. is there somewhere to write -----------------------------------
+    # -- 9. is there somewhere to write -----------------------------------
     from app import wordio
 
     try:

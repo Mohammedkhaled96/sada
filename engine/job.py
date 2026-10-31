@@ -131,7 +131,6 @@ def run_transcription(
     timestamps: bool = False,
     hotwords: str | None = None,
     resume: bool = False,
-    refine: bool = False,
     on_progress=None,
     cancel: threading.Event | None = None,
 ) -> dict:
@@ -250,34 +249,7 @@ def run_transcription(
     wall = time.time() - t0
 
     # ---------------------------------------------------------------- output
-    # ----------------------------------------------------- tidying the text
-    # Dictation only, and only when a local language model is installed. It
-    # corrects spelling, punctuation and grammar and removes the hesitation
-    # words a rule cannot safely remove - "يعني" means something half the
-    # time, and engine/fillers.py will not touch it for that reason.
-    #
-    # It is a separate state because on a CPU it takes seconds, and a progress
-    # window that sits at "transcribing, 100 percent" while something else
-    # happens is a window that looks hung.
     paragraphs = build_paragraphs(segments)
-    refined_note = ""
-    if refine and paragraphs:
-        from engine.refine import make as make_refiner
-
-        refiner = make_refiner(True)
-        if getattr(refiner, "available", False):
-            report(state="refining", message=f"tidying with {refiner.model}")
-            for paragraph in paragraphs:
-                check_cancel()
-                try:
-                    result = refiner.refine(paragraph["text"])
-                except Exception as exc:
-                    refined_note = str(exc)
-                    break
-                if result.changed:
-                    paragraph["text"] = result.text
-                elif result.reason:
-                    refined_note = result.reason
 
     report(state="writing", message="writing the transcript")
     meta = {
@@ -297,8 +269,6 @@ def run_transcription(
         "realtime_factor": round(duration / wall, 2) if wall else None,
         "output_dir": str(job_dir),
         "timestamps": timestamps,
-        "refined": bool(refine) and not refined_note,
-        "refine_note": refined_note,
     }
     written = write_outputs(job_dir, src.stem, segments, paragraphs, meta,
                             with_timestamps=timestamps)

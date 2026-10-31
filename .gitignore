@@ -4,10 +4,6 @@ __pycache__/
 
 # Model checkpoints: 461 MB to 2.9 GB each, fetched on demand.
 models/
-
-# Local language model for tidying dictated text - gigabytes, fetched by
-# Ollama, never committed.
-nlm/
 # One person's settings, now kept beside the project rather than under the
 # user profile. Never committed: it holds their shortcuts, their chosen
 # model and their interface language, and committing it would hand all of

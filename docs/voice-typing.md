@@ -8,8 +8,8 @@ Everything runs on the machine it is installed on. Nothing is sent anywhere,
 there is no key to obtain, no account, and no setting that would change that.
 
 ```
-Ctrl+Shift+D ─► record ─► Whisper ─► tidy up ─► local model ─► Word
-                (mic)     (models/)  (rules)    (nlm/, optional)
+Ctrl+Shift+D ─► record ─► Whisper ─► tidy up ─► Word
+                (mic)     (models/)  (rules)
 ```
 
 ---
@@ -233,116 +233,7 @@ This runs with no network and no language model, like everything else here.
 
 ---
 
-## 6. Correcting the text with a local language model
-
-Optional, local, and off the moment it is not there.
-
-Whisper writes down what it heard. It does not punctuate a long sentence the
-way a typist would, it keeps every "يعني" and "اه", and it has no idea that
-the word it just wrote is spelled differently three lines up. A small language
-model running on the same machine fixes all three, and `engine/refine.py` is
-how it is reached.
-
-### What it needs, and what happens without it
-
-It talks to **Ollama** on `127.0.0.1:11434`. With Ollama absent, or no model
-pulled, or the server stopped, `available` is False and dictation behaves
-exactly as it does with the box unticked. There is nothing to configure before
-it works and nothing to switch off after.
-
-```
-ollama pull qwen3:4b
-```
-
-Models are kept in **`nlm/`**, not `models/`. The speech checkpoints and the
-language model are fetched by different tools, sized in different units and
-deleted for different reasons; somebody clearing one must not take the other
-with it. Point Ollama at it with `OLLAMA_MODELS`.
-
-### Which model, and how to install it
-
-```
-ollama pull qwen3:4b          # no graphics card - most laptops
-ollama pull qwen3:8b          # with an NVIDIA card
-```
-
-| Model | Download | For |
-|---|---|---|
-| `qwen3:8b` | ~5.2 GB | Best Arabic of the practical sizes. Wants a GPU |
-| `falcon3:7b` | ~5 GB | Arabic-native alternative |
-| **`qwen3:4b`** | **~2.5 GB** | **A machine with no graphics card** |
-| `qwen3:1.7b` | ~1.4 GB | A slow machine, or a small disk |
-
-**Note the tag.** `ollama pull qwen3` with no tag fetches the 8B.
-
-**The machine decides, not the user.** `engine/refine.preferred()` asks
-`engine.device` whether there is a CUDA card and picks in a different order
-either way: quality first with a GPU, size first without. Somebody who pulls
-an 8B model onto a laptop with no graphics card should not have to work out
-for themselves why dictation started taking half a minute - with both
-installed, a CPU machine uses the 4B.
-
-Matching is by exact tag over the whole list before any family fallback.
-Matching `qwen3:4b` by family would accept `qwen3:8b`, which is the one thing
-this ordering exists to avoid.
-
-A model installed but not on the list is used anyway when it is the only one:
-somebody who pulled a model on purpose meant to use it.
-
-Jais 30B has the best Arabic of all and needs about 20 GB of VRAM. It is not
-on the list because a dictation tool that needs a workstation is not a
-dictation tool.
-
-### Ollama Cloud is not an option
-
-Its hosted API at `ollama.com/api` and `ollama.com/v1` requires an API key as
-a Bearer token, and cloud models through a local install require
-`ollama signin`. There is no anonymous tier, and as of late 2026 the free
-plan was replaced by metered pay-as-you-go. Using it would also send dictated
-text off the machine, which is the thing this feature is built not to do.
-
-### What it is told
-
-The prompt is in `engine/refine.SYSTEM_PROMPT`, in Arabic and English, and it
-is short on purpose — a long prompt is a model given more ways to be creative.
-Correct spelling, punctuation and grammar; remove hesitation words and
-unintended repetition; **keep the meaning, the style and the dialect, and
-never turn colloquial speech into formal writing**; do not translate,
-summarise, explain, or answer anything in the text; write each language in its
-own script; return only the corrected text.
-
-Temperature `0.1`. Qwen3 is told `/no_think`, because it reasons out loud
-otherwise and there is nothing to reason about in fixing a comma — and any
-reasoning block that arrives anyway is stripped rather than written into the
-document. `keep_alive` is 30 minutes, so a second dictation a minute later
-does not pay the load again.
-
-One paragraph per request, not the whole dictation.
-
-### And it is checked, not trusted
-
-The same line as everywhere else here: tidying what the recogniser produced is
-in scope, deciding what the speaker meant is not. The reply is thrown away and
-the original kept when it
-
-- opens like an assistant — "إليك النص المصحح", "بالطبع", "Here is";
-- has grown or shrunk beyond what a correction explains;
-- has changed script, which is a translation wearing a correction's clothes.
-
-### It never touches a file you transcribe
-
-The job carries a `refine` flag that only dictation sets. A recording of a
-meeting is evidence: it is transcribed, not improved.
-
-### What it costs
-
-Seconds, on a CPU. That is why the job reports **Correcting the text** as its
-own state - a progress window sitting at "transcribing, 100 percent" while
-something else happens is a window that looks hung.
-
----
-
-## 7. What else happens to the text
+## 6. What else happens to the text
 
 In order, after the model has written it and before it reaches Word:
 
@@ -377,7 +268,7 @@ argument against letting one near a document the user cannot see.
 
 ---
 
-## 8. Making sure it works: the dictation check
+## 7. Making sure it works: the dictation check
 
 Settings → Dictation → **Check dictation**. It **records and measures**;
 reading the Windows settings is not enough. On the machine this was developed
@@ -412,7 +303,7 @@ interface most likely to work.
 
 ---
 
-## 9. Accessibility
+## 8. Accessibility
 
 The intended users are blind and use NVDA or JAWS. These are constraints, not
 features added afterwards.
@@ -438,7 +329,7 @@ features added afterwards.
 
 ---
 
-## 10. Known conflict
+## 9. Known conflict
 
 `Ctrl+Shift+D` is Word's own shortcut for double underline. A global hotkey
 takes it before Word sees it, so while Sada is running, Sada gets it. This was
@@ -448,13 +339,12 @@ when Windows refuses it.
 
 ---
 
-## 11. Settings that affect voice typing
+## 10. Settings that affect voice typing
 
 | Setting | |
 |---|---|
 | **Microphone** | Which input to record from. The system default unless chosen. |
-| **Always correct** | `wrong = right`, one per line. §7. |
-| **Correct with a local model** | §6. On by default; does nothing without Ollama. |
+| **Always correct** | `wrong = right`, one per line. §6. |
 | **Model** | The same model that transcribes files. One list, one choice. |
 | **Audio language** | Automatic unless set. A set language is passed straight to the model and skips detection. |
 | **Names and terms** | Fed to the model as context, so a name it would otherwise spell by sound is already in front of it. |
@@ -463,7 +353,7 @@ when Windows refuses it.
 
 ---
 
-## 12. A bug worth recording
+## 11. A bug worth recording
 
 `engine/backends.py` listed `hotwords` in `OpenAIWhisperBackend.DROP` with
 nothing mapping it to `initial_prompt`, which is the reference

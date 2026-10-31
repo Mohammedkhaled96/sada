@@ -82,10 +82,6 @@ class Settings:
     # one who knows which way, so they say it once instead of fixing it by
     # hand after every dictation.
     dictation_corrections: str = ""
-    # Tidy dictated text with a local language model when one is installed.
-    # On by default and does nothing at all when there is none, so there is
-    # no setting to find before it works and none to switch off after.
-    refine_text: bool = True
     dictation_device: str = ""              # empty means the system default
 
     # shortcuts

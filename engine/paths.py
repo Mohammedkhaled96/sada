@@ -55,11 +55,6 @@ def _dir(env_var: str, name: str) -> Path:
 # should pass an explicit path instead of mutating module state - engine.daemon
 # takes --out for exactly that reason.
 MODELS_DIR = _dir("SADA_MODELS_DIR", "models")
-# Where a local language model for tidying dictated text lives. Deliberately
-# not models/, which holds the speech checkpoints: the two are fetched by
-# different tools, sized in different units and deleted for different reasons,
-# and a user clearing one must not take the other with it.
-NLM_DIR = _dir("SADA_NLM_DIR", "nlm")
 OUT_DIR = _dir("SADA_OUT_DIR", "out")
 
 # Anything small the program writes about itself: the settings file, and
