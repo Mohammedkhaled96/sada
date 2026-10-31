@@ -154,6 +154,78 @@ check("dictation does not transcribe anything itself",
       "stream_segments" not in source and "transcribe(" not in source)
 
 
+# ------------------------------------------------- more than one language
+print("\n--- a dictation that changes language ---")
+
+from engine.chunking import SAMPLE_RATE, plan_chunks, speech_regions  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "tests"))
+import speechgen                                                   # noqa: E402
+
+english = speechgen.pick("david", "zira", "english")
+arabic = speechgen.pick("arabic", "leila")
+
+if english is None or arabic is None:
+    print(f"  (needs an English and an Arabic voice; this machine has "
+          f"{len(speechgen.voices())} - skipped)")
+else:
+    mixed = speechgen.conversation([
+        ("السلام عليكم، التقرير جاهز للمراجعة.", arabic),
+        ("The quarterly report is ready for review.", english),
+        ("Buenos dias, el informe esta listo para la revision.", english),
+    ], gap=1.0)
+
+    # Whisper decides one language per call and writes the whole call in that
+    # script, so the chunk is the unit a speaker can change language in. Given
+    # all three sentences in one call it detected Arabic, wrote the Arabic and
+    # stopped - ten seconds of speech lost. Measured, on this recording.
+    chunks = plan_chunks(mixed)
+    regions = speech_regions(mixed)
+    check("a short recording is chunked by sentence, not in one piece",
+          len(chunks) >= 3,
+          ", ".join(f"{a / SAMPLE_RATE:.1f}-{b / SAMPLE_RATE:.1f}s"
+                    for a, b in chunks))
+    check("there is a chunk boundary for every pause",
+          len(chunks) >= len(regions) - 1,
+          f"{len(regions)} regions, {len(chunks)} chunks")
+    check("and the chunks cover the whole recording",
+          chunks[0][0] <= regions[0]["start"] and chunks[-1][1] >= regions[-1]["end"])
+
+    # A long recording keeps long chunks: an hour of audio must not become
+    # 1,400 calls because dictation wanted sentence-sized ones.
+    long_audio = np.tile(mixed, 20)[: 20 * 60 * SAMPLE_RATE]
+    per_minute = len(plan_chunks(long_audio)) / (len(long_audio) / SAMPLE_RATE / 60)
+    check("but a long recording does not", per_minute < 10,
+          f"{per_minute:.1f} chunks a minute")
+
+    from engine.models import info                                 # noqa: E402
+
+    if not info("turbo").installed:
+        print("  (large-v3-turbo is not installed - transcription skipped)")
+    else:
+        from engine.backends import load_backend                   # noqa: E402
+        from engine.device import pick_device                      # noqa: E402
+        from engine.job import DECODE_OPTS                         # noqa: E402
+
+        backend = load_backend("openai", "turbo", pick_device("cpu"))
+        rows = list(backend.stream_segments(mixed, None, dict(DECODE_OPTS)))
+        text = " ".join(r["text"] for r in rows)
+
+        def arabic_letters(s):
+            return sum("؀" <= c <= "ۿ" for c in s)
+
+        check("every sentence survives, not just the first",
+              len(rows) >= 3, f"{len(rows)} segments")
+        check("the Arabic is in Arabic letters", arabic_letters(text) > 10,
+              f"{arabic_letters(text)} of them")
+        check("the English is not transliterated into them",
+              "report" in text.lower(), text[:60])
+        check("and neither is the Spanish",
+              "informe" in text.lower(), text[:60])
+        for row in rows:
+            print(f"        [{row['language']}] {row['text'].strip()[:58]}")
+
+
 # ------------------------------------------------------------- local only
 print("\n--- nothing leaves the machine ---")
 

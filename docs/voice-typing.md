@@ -142,7 +142,49 @@ instead of 7.0 s.
 
 ---
 
-## 4. The emoji generator
+## 4. More than one language in one dictation
+
+Say a sentence in Arabic, the next in English and the next in Spanish, and
+each is written in its own script.
+
+This is not something the model does by being asked. **Whisper decides one
+language per call and writes the whole call in that script.** `language` is
+not a hint; there is only one answer per call to be had. Handed all three
+sentences in a single call it did worse than write them in the wrong script:
+it detected Arabic, wrote the Arabic sentence, and **stopped** - ten seconds
+of speech lost, measured on exactly that recording.
+
+So the chunk is the unit a speaker can change language in, and for a short
+recording the chunks are **one sentence each**: `engine/chunking.py` closes a
+chunk at the first pause after 2.5 seconds when the recording is under three
+minutes. Each chunk is then handed to the model with no language at all and
+decides its own.
+
+```
+speech regions   0.3-2.2   2.4-4.8   6.0-8.6   10.1-14.0
+chunks           0.1-5.0   5.8-8.8   9.9-14.2
+                 Arabic    English   Spanish
+```
+
+Nothing is forced and nothing is voted on. The whole-file language vote that
+used to happen first is why this failed before: it sampled the opening,
+decided "Arabic", and forced Arabic on the English half, which came back in
+Arabic letters. One answer per file cannot describe a file with three
+languages in it.
+
+The cost is one extra encoder pass per chunk, because detecting is a pass.
+The shortened window in §3 is what makes that affordable: a 2.5-second chunk
+is encoded in an 8-second window, not a 30-second one.
+
+A language the user has chosen in Settings is still forced on every chunk, and
+skips detection entirely. Automatic is the default.
+
+Longer recordings keep 90-second chunks, so transcribing an hour of audio is
+not turned into 1,400 calls.
+
+---
+
+## 5. The emoji generator
 
 Say the name of an emoji with the word "emoji" — or "ايموجي" — and the emoji
 is written, not the words naming it.
@@ -186,7 +228,7 @@ This runs with no network and no language model, like everything else here.
 
 ---
 
-## 5. What else happens to the text
+## 6. What else happens to the text
 
 In order, after the model has written it and before it reaches Word:
 
@@ -201,7 +243,7 @@ In order, after the model has written it and before it reaches Word:
    more times in a row leaves one; a phrase of two or more words repeated
    immediately after itself is collapsed. Twice stays twice, because "very
    very", "لا لا" and "no no" are things people say.
-3. **Emoji** — §4.
+3. **Emoji** — §5.
 4. **The user's own replacements** — Settings, *Always correct*, one per line
    as `wrong = right`. Whole words, longest match first, applied to the
    finished text so a replacement can span a sentence. A speech model
@@ -221,7 +263,7 @@ argument against letting one near a document the user cannot see.
 
 ---
 
-## 6. Making sure it works: the dictation check
+## 7. Making sure it works: the dictation check
 
 Settings → Dictation → **Check dictation**. It **records and measures**;
 reading the Windows settings is not enough. On the machine this was developed
@@ -256,7 +298,7 @@ interface most likely to work.
 
 ---
 
-## 7. Accessibility
+## 8. Accessibility
 
 The intended users are blind and use NVDA or JAWS. These are constraints, not
 features added afterwards.
@@ -282,7 +324,7 @@ features added afterwards.
 
 ---
 
-## 8. Known conflict
+## 9. Known conflict
 
 `Ctrl+Shift+D` is Word's own shortcut for double underline. A global hotkey
 takes it before Word sees it, so while Sada is running, Sada gets it. This was
@@ -292,7 +334,7 @@ when Windows refuses it.
 
 ---
 
-## 9. Settings that affect voice typing
+## 10. Settings that affect voice typing
 
 | Setting | |
 |---|---|
@@ -306,7 +348,7 @@ when Windows refuses it.
 
 ---
 
-## 10. A bug worth recording
+## 11. A bug worth recording
 
 `engine/backends.py` listed `hotwords` in `OpenAIWhisperBackend.DROP` with
 nothing mapping it to `initial_prompt`, which is the reference

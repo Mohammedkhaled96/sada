@@ -43,17 +43,43 @@ def speech_regions(audio: np.ndarray, sampling_rate: int = SAMPLE_RATE) -> list[
         return []
 
 
-def plan_chunks(audio: np.ndarray, target_s: float = 90.0, max_s: float = 150.0,
+# A recording this short is somebody dictating a few sentences, not a file
+# they are transcribing. Its chunks are made sentence-sized so that each one
+# can be in its own language - see SHORT_TARGET_S.
+SHORT_AUDIO_S = 180.0
+# About one sentence. A chunk is the unit a speaker can change language in,
+# because Whisper decides one language per call - and it does worse than
+# write the rest in the wrong script: handed Arabic then English then
+# Spanish in a single call it detected Arabic, wrote the Arabic, and stopped,
+# losing ten seconds of speech entirely. Measured, that exact recording.
+#
+# Low enough to put each utterance in its own call, and not lower: every call
+# pays for a whole encoder window, so chunking by the word would be slower
+# than talking.
+SHORT_TARGET_S = 2.5
+
+
+def plan_chunks(audio: np.ndarray, target_s: float | None = None,
+                max_s: float = 150.0,
                 sampling_rate: int = SAMPLE_RATE) -> list[tuple[int, int]]:
     """Return (start_sample, end_sample) pairs covering the speech in `audio`.
 
     Chunks grow until `target_s`, then close at the next pause. A single
     uninterrupted stretch longer than `max_s` is split anyway, because one
     enormous chunk would stall progress reporting for minutes at a time.
+
+    With no target given, a short recording gets short chunks. Whisper decides
+    one language per call and writes the whole call in that script, so the
+    chunk is the unit a speaker can change language in: 90-second chunks mean
+    a dictation that starts in Arabic and ends in Spanish comes back entirely
+    in one of them, transliterated.
     """
     total = len(audio)
     if total == 0:
         return []
+    if target_s is None:
+        target_s = (SHORT_TARGET_S if total / sampling_rate <= SHORT_AUDIO_S
+                    else 90.0)
 
     target = int(target_s * sampling_rate)
     hard_max = int(max_s * sampling_rate)

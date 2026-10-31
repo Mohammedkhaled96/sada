@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from engine.audio import SAMPLE_RATE, decode_audio
-from engine.langdetect import detect_language
+from engine.langdetect import detect_language    # noqa: F401  (CLI uses it)
 from engine.textout import build_paragraphs, is_rtl, write_outputs
 
 # These specific values are what keeps Whisper from hallucinating on long
@@ -112,6 +112,16 @@ def load_checkpoint(ckpt: Path) -> tuple[list[dict], float]:
     return segments, (segments[-1]["end"] if segments else 0.0)
 
 
+def _majority(languages: list[str]) -> str:
+    """The language most chunks were written in, for the reading direction."""
+    if not languages:
+        return ""
+    counts: dict[str, int] = {}
+    for name in languages:
+        counts[name] = counts.get(name, 0) + 1
+    return max(counts, key=lambda k: counts[k])
+
+
 def run_transcription(
     audio_path: str | Path,
     backend,
@@ -158,14 +168,21 @@ def run_transcription(
     report(duration=duration)
 
     # -------------------------------------------------------------- language
+    # A language the user chose is forced on every chunk. Left on automatic,
+    # nothing is forced at all: each chunk is handed to the model with no
+    # language and decides its own, so a recording that moves between Arabic,
+    # English and Spanish is written in three scripts instead of one.
+    #
+    # The whole-file vote that used to happen here is why that failed before.
+    # It asked the opening of the file, decided "Arabic", and then forced
+    # Arabic on the English half, which came back in Arabic letters. One
+    # answer per file cannot describe a file with three languages in it.
     check_cancel()
+    spoken: list[str] = []
     if language:
         report(state="detecting", language=language, language_confidence=1.0)
     else:
         report(state="detecting", message="detecting the language")
-        lang, conf, _votes = detect_language(backend, audio, log=lambda *a: None)
-        language = lang
-        report(language=lang, language_confidence=conf)
 
     # ------------------------------------------------------------ transcribe
     # Resuming is only safe when the backend can actually be told to skip the
@@ -198,6 +215,13 @@ def run_transcription(
     ck = ckpt.open("a", encoding="utf-8")
     try:
         for row in backend.stream_segments(audio, language, opts):
+            heard = row.get("language")
+            if heard and heard not in spoken:
+                # First time this language appears. Reported so the window
+                # names what is being written as it changes, rather than
+                # claiming one language for the whole recording.
+                spoken.append(heard)
+                report(language="+".join(spoken), language_confidence=1.0)
             segments.append(row)
             ck.write(json.dumps(row, ensure_ascii=False) + "\n")
             ck.flush()
@@ -230,9 +254,11 @@ def run_transcription(
     meta = {
         "source": str(src),
         "duration_seconds": round(duration, 2),
-        "language": language,
+        "language": language or "+".join(spoken),
         "language_confidence": round(prog.language_confidence, 4),
-        "rtl": is_rtl(language),
+        # The paragraph can only face one way, so the language most of the
+        # chunks came back in decides it.
+        "rtl": is_rtl(language or _majority(spoken)),
         "model": getattr(backend, "label", "?"),
         "backend": getattr(backend, "name", "?"),
         "segments": len(segments),
