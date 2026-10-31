@@ -363,6 +363,12 @@ S: dict[str, tuple[str, str]] = {
                  "أُدرج النص في المستند {doc}، ومؤشر الكتابة في أول النص."),
     "say_cancelled": ("Transcription cancelled. The work done so far is saved.",
                       "أُلغي التفريغ. ما تم إنجازه محفوظ."),
+    "say_word_not_in_front": (
+        "Word is not the window in front, so this shortcut did nothing. "
+        "Switch to Word, or turn off \"only when Word is in front\" in "
+        "Settings.",
+        "الوورد مش النافذة اللي قدّام، فالاختصار ده ماعملش حاجة. ارجع للوورد، "
+        "أو اقفل «فقط عندما يكون الوورد في المقدمة» من الإعدادات."),
     "say_nothing_to_cancel": ("There is no job running to cancel.",
                               "لا يوجد عمل جارٍ لإلغائه."),
 

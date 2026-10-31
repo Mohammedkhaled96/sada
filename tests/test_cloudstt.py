@@ -190,6 +190,35 @@ check("and an emoji on its own decides nothing",
       cloudstt.script_of("👍") == "")
 
 
+print("\n--- the key belongs to dictation, and to nothing else ---")
+
+# Asked for explicitly: the key is for voice typing. Transcribing a file must
+# keep working exactly as it did, on this machine, with nothing sent anywhere.
+# A key saved for dictation must not quietly change what happens to somebody's
+# recording of a private meeting.
+import re                                                        # noqa: E402
+
+for module in ("engine/job.py", "app/jobs.py", "engine/daemon.py",
+               "engine/transcribe.py", "engine/backends.py"):
+    source = (ROOT / module).read_text(encoding="utf-8")
+    uses = [word for word in ("cloudstt", "dictation_ai_key", "polish",
+                              "generativelanguage")
+            if re.search(r"(?<!\w)" + word, source)]
+    check(f"{module} never touches the key or the network",
+          not uses, ", ".join(uses))
+
+senders = sorted(p.name for p in (ROOT / "engine").glob("*.py")
+                 if "generativelanguage" in p.read_text(encoding="utf-8"))
+check("and only the two dictation modules reach Google at all",
+      senders == ["cloudstt.py", "polish.py"], ", ".join(senders))
+
+# Silence when a shortcut is refused is indistinguishable from the program
+# being dead, to somebody who cannot see which window has focus.
+main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+check("a refused shortcut says why instead of doing nothing",
+      "say_word_not_in_front" in main)
+
+
 print("\n" + "=" * 60)
 if failures:
     print(f"FAILED: {len(failures)}")

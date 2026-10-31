@@ -282,10 +282,19 @@ class AppFrame(wx.Frame):
     # -------------------------------------------------------- hotkey handlers
     def _hotkey_allowed(self) -> bool:
         """Honour "only when Word is in front" so these shortcuts do not eat a
-        key combination system-wide while the user works elsewhere."""
+        key combination system-wide while the user works elsewhere.
+
+        A refusal is spoken. Doing nothing at all is what this used to do, and
+        to somebody who cannot see which window has focus it is identical to
+        the program being dead - which is exactly how it was reported: "I
+        press the shortcut, nothing works."
+        """
         if not self.settings.only_when_word_focused:
             return True
-        return wordio.word_is_foreground()
+        if wordio.word_is_foreground():
+            return True
+        self.say(t("say_word_not_in_front"), interrupt=True)
+        return False
 
     def on_transcribe(self, _evt) -> None:
         if self._hotkey_allowed():
