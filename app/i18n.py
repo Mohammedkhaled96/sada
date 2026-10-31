@@ -425,6 +425,21 @@ S: dict[str, tuple[str, str]] = {
     "chk_ai": ("Dictation engine", "محرّك الإملاء"),
     "chk_ai_off": ("On this computer. Nothing is sent anywhere.",
                    "على هذا الجهاز. لا يُرسل أي شيء لأي مكان."),
+    "chk_key_shape": ("The key looks like the right kind",
+                      "المفتاح شكله النوع الصحيح"),
+    "chk_key_shape_fix": (
+        "An AI Studio API key starts with AIza. A value starting with AQ. is "
+        "a temporary sign-in token: it works for about an hour and then "
+        "stops. In Google AI Studio open Get API key and copy the key itself.",
+        "مفتاح AI Studio بيبدأ بـ AIza. والقيمة اللي بتبدأ بـ AQ. دي رمز دخول "
+        "مؤقت: بيشتغل حوالي ساعة وبعدين بيقف. في Google AI Studio افتح "
+        "«Get API key» وانسخ المفتاح نفسه."),
+    "chk_ai_no_key": ("No key saved, so dictation writes on this computer. "
+                      "Paste a key from aistudio.google.com above to use "
+                      "Google.",
+                      "مافيش مفتاح محفوظ، فالإملاء بيتكتب على هذا الجهاز. "
+                      "الزق مفتاح من aistudio.google.com بالأعلى عشان "
+                      "تستخدم جوجل."),
     "chk_ai_ok": ("Working, model {model}", "يعمل، النموذج {model}"),
     "chk_ai_fix": ("The key was refused: {error}. Check it in Settings, or "
                    "set AI repair to Off.",

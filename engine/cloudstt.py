@@ -47,13 +47,14 @@ ENDPOINT = ("https://generativelanguage.googleapis.com/v1beta/models/"
 #   gemini-3.8-flash          timed out
 #   gemini-flash-latest       timed out
 #   gemini-2.5-flash          404, no longer available
+# Only names that were measured transcribing real speech. gemini-flash-latest
+# is deliberately absent despite being the tidiest name here: it never
+# answered, twice, and being cached as the chosen model is indistinguishable
+# from the key being broken - every request simply times out.
 CANDIDATES = (
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-2.5-flash-lite",
-    "gemini-flash-latest",
 )
 DEFAULT_MODEL = CANDIDATES[0]
 PROBE_TIMEOUT_S = 25
@@ -120,6 +121,23 @@ Return only the transcript."""
 
 class CloudError(RuntimeError):
     pass
+
+
+# An AI Studio API key starts with this. A value starting with "AQ." is an
+# OAuth access token: the endpoint accepts it, so everything works for an
+# hour or so and then stops, which is the hardest kind of failure to place.
+KEY_PREFIX = "AIza"
+OAUTH_PREFIX = "AQ."
+
+
+def key_shape(api_key: str) -> str:
+    """"ok", "oauth" or "unknown" - what this value looks like."""
+    api_key = (api_key or "").strip()
+    if api_key.startswith(KEY_PREFIX):
+        return "ok"
+    if api_key.startswith(OAUTH_PREFIX):
+        return "oauth"
+    return "unknown"
 
 
 def to_wav(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
@@ -240,6 +258,21 @@ class GeminiTranscriber:
             return self.model
 
 
+def _probe_audio():
+    """A couple of seconds of real speech, if this install has any."""
+    from pathlib import Path
+
+    sample = Path(__file__).resolve().parent.parent / "audio" / "test.mp3"
+    if not sample.exists():
+        return None
+    try:
+        from engine.audio import decode_audio
+
+        return decode_audio(sample)[: 3 * SAMPLE_RATE].astype("float32")
+    except Exception:
+        return None
+
+
 def discover(api_key: str, timeout: float = PROBE_TIMEOUT_S,
              candidates=CANDIDATES, transport=None) -> str:
     """Which model will actually transcribe for this key, right now.
@@ -250,8 +283,12 @@ def discover(api_key: str, timeout: float = PROBE_TIMEOUT_S,
     """
     import numpy as np
 
-    rng = np.random.default_rng(0)
-    probe = rng.normal(0, 0.05, SAMPLE_RATE // 2).astype(np.float32)
+    # Real speech where there is any, so a model that answers quickly to
+    # noise but stalls on audio cannot pass. Noise only as a last resort.
+    probe = _probe_audio()
+    if probe is None:
+        probe = np.random.default_rng(0).normal(
+            0, 0.05, SAMPLE_RATE // 2).astype(np.float32)
     problems = []
     for name in candidates:
         engine = GeminiTranscriber(api_key, name, timeout=timeout,

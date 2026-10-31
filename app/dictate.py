@@ -65,8 +65,13 @@ class DictationController:
         network blip, a rate limit or a refused reply is not this, and must
         not throw away a model that works.
         """
+        # A timeout counts. A model that will not answer is as useless as one
+        # that is gone, and keeping it cached means every later dictation
+        # waits the full timeout and then falls back - which looks exactly
+        # like the key being refused.
         if not any(sign in note for sign in ("404", "no longer available",
-                                             "not found", "NOT_FOUND")):
+                                             "not found", "NOT_FOUND",
+                                             "timed out", "timeout")):
             return
         settings = self.frame.settings
         if not settings.dictation_ai_model:

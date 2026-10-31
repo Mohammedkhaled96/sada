@@ -145,30 +145,37 @@ def run(frame, device_index: int | None = None, ai=None):
                t("chk_voice_fix"))
 
     # -- 6 and 7. can it be transcribed, and how long does that take -------
-    if not frame.model_ready.is_set() or frame.backend is None:
+    # A local model that is not ready yet skips these two and lets the rest
+    # run. It used to end the check here, which meant the engine and shortcut
+    # results - including whether the Google key works - were never reached
+    # while Whisper was still loading.
+    ready = frame.model_ready.is_set() and frame.backend is not None
+    if not ready:
         yield Step(t("chk_model"), False, "", t("chk_model_fix"))
-        return
 
     from engine.window import short_window
 
     seconds = len(audio) / mic.SAMPLE_RATE
     started = time.time()
     try:
+        if not ready:
+            raise RuntimeError("skipped")
         with short_window(frame.backend.model, seconds):
             rows = list(frame.backend.stream_segments(
                 audio.astype(np.float32), None,
                 {"condition_on_previous_text": False}))
         text = " ".join((r.get("text") or "").strip() for r in rows).strip()
     except Exception as exc:
-        yield Step(t("chk_recognised"), False, str(exc), t("chk_model_fix"))
-        return
-    took = time.time() - started
-
-    yield Step(t("chk_recognised"), bool(text),
-               text or "", t("chk_recognised_fix"))
-    yield Step(t("chk_speed"), None,
-               t("chk_speed_detail", seconds=f"{took:.1f}",
-                 audio=f"{seconds:.0f}"))
+        if ready:
+            yield Step(t("chk_recognised"), False, str(exc), t("chk_model_fix"))
+        text, took = "", 0.0
+    else:
+        took = time.time() - started
+        yield Step(t("chk_recognised"), bool(text),
+                   text or "", t("chk_recognised_fix"))
+        yield Step(t("chk_speed"), None,
+                   t("chk_speed_detail", seconds=f"{took:.1f}",
+                     audio=f"{seconds:.0f}"))
 
     # -- 8. can the shortcut be taken --------------------------------------
     failed = getattr(frame, "hotkey_failures", [])
@@ -187,10 +194,24 @@ def run(frame, device_index: int | None = None, ai=None):
     if provider == "local":
         yield Step(t("chk_ai"), None, t("chk_ai_off"))
     else:
-        from engine import cloudstt, polish
+        from engine import cloudstt
 
-        engine = (cloudstt.make(provider, key, model) if provider == "gemini"
-                  else polish.make(provider, key, model))
+        # The engine that actually transcribes, not the text repairer. This
+        # read "if provider == 'gemini'" after the setting was renamed to
+        # "auto", so it quietly tested the wrong thing and reported that
+        # Google could not be reached.
+        engine = cloudstt.make(provider, key, model)
+        if not engine.available:
+            yield Step(t("chk_ai"), None, t("chk_ai_no_key"))
+            return
+
+        # Said before the request, because the request may well succeed: an
+        # OAuth token is accepted here and then expires, so dictation works
+        # today and stops tomorrow with nothing to point at.
+        shape = cloudstt.key_shape(key)
+        if shape != "ok":
+            yield Step(t("chk_key_shape"), False,
+                       key[:3] + "...", t("chk_key_shape_fix"))
         try:
             yield Step(t("chk_ai"), True, t("chk_ai_ok", model=engine.check()))
         except Exception as exc:
