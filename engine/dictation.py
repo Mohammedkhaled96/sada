@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from engine import fillers, window
+from engine import cleanup, fillers, langmap, window
 from engine.window import short_window
 
 SAMPLE_RATE = 16000
@@ -70,6 +70,12 @@ QUIET_SEARCH_S = 1.5
 QUIET_STEP_S = 0.05
 # Below this the language guess is not worth forcing on the model.
 LANGUAGE_CONFIDENCE_MIN = 0.6
+# A run of audio shorter than this holds no word worth a whole window.
+MIN_RUN_AUDIO_S = 0.35
+# How much of what has already been written is shown to the model as context.
+# Enough to carry a name or a term across a pause, short enough that it cannot
+# become something the decoder starts copying instead of listening.
+PROMPT_TAIL_CHARS = 160
 
 
 @dataclass
@@ -233,6 +239,7 @@ class Dictation:
                  remove_fillers: bool = True,
                  language: str | None = None,
                  hotwords: str | None = None,
+                 corrections: str | None = None,
                  max_total_s: float = MAX_TOTAL_S):
         self.backend = backend
         # Whether language detection is cheap enough to do per segment.
@@ -242,6 +249,8 @@ class Dictation:
         self.remove_fillers = remove_fillers
         self.forced_language = language or None
         self.hotwords = (hotwords or "").strip() or None
+        self.corrections = cleanup.parse_corrections(corrections or "")
+        self._written = ""
         self.max_total_s = max_total_s
 
         self.segmenter = Segmenter()
@@ -290,8 +299,12 @@ class Dictation:
         with self._lock:
             parts = [self._texts[i] for i in sorted(self._texts) if self._texts[i]]
             language = _majority(self._languages)
+            # The user's own replacements go on at the end, over the whole
+            # text, so one that spans a segment boundary still matches.
+            text = cleanup.apply_corrections(" ".join(parts).strip(),
+                                             self.corrections)
             result = Result(
-                text=" ".join(parts).strip(),
+                text=text,
                 language=language,
                 audio_seconds=round(self._audio_s, 2),
                 compute_seconds=round(self._compute_s, 2),
@@ -331,20 +344,45 @@ class Dictation:
                     self._languages.append(language)
 
     def _transcribe(self, segment: np.ndarray) -> tuple[str, str]:
-        seconds = len(segment) / SAMPLE_RATE
+        """One segment, which may be in more than one language."""
         started = time.time()
 
-        language = self.forced_language or self._detect(segment)
+        if self.forced_language:
+            runs = [langmap.Run(0, len(segment), self.forced_language)]
+        else:
+            # Whisper writes a whole call in one language, transliterating
+            # anything else into its script. A sentence that changes language
+            # has to be split before it is handed over, not after.
+            runs = langmap.split(segment, self.lid_backend if self.cheap_detection
+                                 else None, fallback=self._last_language())
+            if not self.cheap_detection and runs[0].language is None:
+                runs[0].language = self._detect(segment)
+
+        texts = []
+        for run in runs:
+            text = self._transcribe_run(segment[run.start:run.end], run.language)
+            if text:
+                texts.append(text)
+
+        self._compute_s += time.time() - started
+        return " ".join(texts).strip(), langmap.majority(runs)
+
+    def _transcribe_run(self, audio: np.ndarray, language: str | None) -> str:
+        """One stretch of audio known to be in a single language."""
+        seconds = len(audio) / SAMPLE_RATE
+        if seconds < MIN_RUN_AUDIO_S:
+            return ""
 
         opts = {"condition_on_previous_text": False,
                 "temperature": TEMPERATURES}
-        if self.hotwords:
-            opts["hotwords"] = self.hotwords
+        prompt = self._prompt()
+        if prompt:
+            opts["initial_prompt"] = prompt
 
         pieces: list[str] = []
         with short_window(self.backend.model if hasattr(self.backend, "model")
                           else None, seconds):
-            for row in self.backend.stream_segments(segment, language, opts):
+            for row in self.backend.stream_segments(audio, language, opts):
                 text = (row.get("text") or "").strip()
                 if not text:
                     continue
@@ -367,15 +405,31 @@ class Dictation:
                 pieces.append(text)
 
         joined = " ".join(pieces).strip()
-        if self.remove_fillers and joined:
+        if not joined:
+            return ""
+        with self._lock:
+            self._written = (self._written + " " + joined)[-PROMPT_TAIL_CHARS:]
+        if self.remove_fillers:
             if fillers.is_all_filler(joined, language):
                 self._dropped += 1
-                joined = ""
-            else:
-                joined = fillers.strip_fillers(joined, language)
+                return ""
+            joined = fillers.strip_fillers(joined, language)
+        return cleanup.tidy(joined, language)
 
-        self._compute_s += time.time() - started
-        return joined, language or ""
+    def _prompt(self) -> str:
+        """Terms the model should already have in mind.
+
+        The user's names and jargon, then the end of what has been written so
+        far. Segments are decoded independently - they have to be, or an error
+        in one would be carried into every one after it - and that costs the
+        continuity a human transcriber has: a name spelled one way before the
+        pause and another way after it. This gives that back without giving up
+        the independence, because it is only ever a hint.
+        """
+        with self._lock:
+            tail = self._written.strip()
+        parts = [p for p in (self.hotwords, tail) if p]
+        return " ".join(parts)[-PROMPT_TAIL_CHARS * 2:]
 
     def _detect(self, segment: np.ndarray) -> str | None:
         """Which language this segment is in, decided as cheaply as possible.

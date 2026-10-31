@@ -28,3 +28,7 @@ bin/*.exe
 release/*.exe
 dist/
 build/
+
+# The Arabic SAPI voice drops a dictionary file in the working
+# directory the first time tests/speechgen.py uses it.
+*.dic

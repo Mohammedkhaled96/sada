@@ -23,7 +23,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from engine import fillers
+from engine import cleanup, fillers
 from engine.dictation import (MAX_SEGMENT_S, MIN_SEGMENT_S, PAUSE_S, Dictation,
                               Segmenter, transcribe_stream)
 
@@ -62,6 +62,32 @@ for text, expected in [
 ]:
     got = fillers.strip_fillers(text)
     check(f"removed from: {text}", got == expected, f"got {got!r}")
+
+print("\n--- repetition the decoder produced, not the speaker ---")
+for text, expected, why in [
+    ("the the the meeting is at four", "the meeting is at four",
+     "three in a row is the decoder"),
+    ("بسم الله بسم الله بسم الله خلاص", "بسم الله خلاص",
+     "a repeated phrase is the decoder losing its place"),
+    ("very very good", "very very good", "twice is something people say"),
+    ("لا لا مش كده", "لا لا مش كده", "and in Arabic too"),
+    ("نعم ، تمام .  خلاص", "نعم، تمام. خلاص", "spacing around punctuation"),
+]:
+    got = cleanup.tidy(text)
+    check(f"{why}: {text}", got == expected, f"got {got!r}")
+
+print("\n--- replacements the user wrote ---")
+pairs = cleanup.parse_corrections("سدى = صدى\n# a comment\nwisper = Whisper\n"
+                                  "عبد = Abd\nعبد الله = Abdullah")
+check("comments and blank lines are ignored", len(pairs) == 4, str(len(pairs)))
+check("the longest match wins, not the first",
+      cleanup.apply_corrections("مع عبد الله", pairs) == "مع Abdullah",
+      cleanup.apply_corrections("مع عبد الله", pairs))
+check("a replacement cannot eat the inside of a word",
+      cleanup.apply_corrections("سداسي", pairs) == "سداسي",
+      cleanup.apply_corrections("سداسي", pairs))
+check("and nothing happens without a list",
+      cleanup.apply_corrections("سدى", []) == "سدى")
 
 check("a segment of nothing but hesitation is recognised",
       fillers.is_all_filler("أمم ممم") and fillers.is_all_filler("um uh"))
@@ -224,6 +250,61 @@ else:
           f"{result.compute_seconds:.1f}s of work for "
           f"{result.audio_seconds:.1f}s of audio")
     print(f"        fed in {wall:.1f}s wall, text: {result.text[:70]}")
+
+
+print("\n--- a dictation that changes language ---")
+
+if not have_model:
+    print("  (large-v3-turbo missing - skipped)")
+else:
+    sys.path.insert(0, str(ROOT / "tests"))
+    import speechgen
+
+    from engine import langmap
+    from engine.models import LANGUAGE_DETECT
+
+    english = speechgen.pick("david", "zira", "english")
+    arabic = speechgen.pick("arabic", "leila")
+    if english is None or arabic is None:
+        print(f"  (needs an English and an Arabic voice; this machine has "
+              f"{len(speechgen.voices())} - skipped)")
+    else:
+        lid = (load_backend("openai", LANGUAGE_DETECT, pick_device("cpu"))
+               if info(LANGUAGE_DETECT).installed else None)
+        mixed = speechgen.conversation([
+            ("السلام عليكم، التقرير جاهز.", arabic),
+            ("The quarterly report is ready for review.", english),
+            ("شكرا جزيلا لك.", arabic),
+        ])
+        text = transcribe_stream(Dictation(backend, lid_backend=lid), mixed).text
+
+        def in_arabic(s):
+            return sum("؀" <= c <= "ۿ" for c in s)
+
+        def in_latin(s):
+            return sum(c.isascii() and c.isalpha() for c in s)
+
+        check("both scripts come back", in_arabic(text) > 10 and in_latin(text) > 10,
+              f"{in_arabic(text)} Arabic letters, {in_latin(text)} Latin")
+        # The failure this replaces: `language` is not a hint. Whisper decides
+        # once per call and writes the whole call in that script, so the
+        # English used to come back spelled in Arabic letters.
+        check("the English was not transliterated",
+              "report" in text.lower() or "quarterly" in text.lower(), text)
+        check("the Arabic was not transliterated either",
+              "عليكم" in text or "شكرا" in text, text)
+        check("and they are in the order they were said",
+              "eport" in text and "عليكم" in text
+              and text.index("eport") > text.index("عليكم"), text)
+        print(f"        {text}")
+
+        if lid is not None:
+            runs = langmap.split(mixed, lid)
+            check("the language boundaries were found", len(runs) >= 2,
+                  ", ".join(f"{r.language}:{r.seconds:.1f}s" for r in runs))
+            check("and they land in the pauses, not inside a phrase",
+                  all(r.seconds >= langmap.MIN_RUN_S for r in runs),
+                  ", ".join(f"{r.seconds:.1f}s" for r in runs))
 
 
 print("\n" + "=" * 60)

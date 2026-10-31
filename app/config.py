@@ -78,6 +78,11 @@ class Settings:
 
     # dictation
     dictation_remove_fillers: bool = True
+    # One replacement per line, "wrong = right". A speech model mishears a
+    # particular name the same way every time, and the person dictating is the
+    # one who knows which way, so they say it once instead of fixing it by
+    # hand after every dictation.
+    dictation_corrections: str = ""
     dictation_device: str = ""              # empty means the system default
 
     # shortcuts

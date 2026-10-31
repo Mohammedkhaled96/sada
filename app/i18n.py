@@ -398,6 +398,11 @@ S: dict[str, tuple[str, str]] = {
                             "هذه الأصوات فقط، ككلمات كاملة. لا تُحذف أي كلمة "
                             "قلتها فعلًا."),
     "field_mic": ("Microphone:", "الميكروفون:"),
+    "field_corrections": ("Always correct:", "تصحيحات دائمة:"),
+    "help_corrections": ("One per line, wrong = right. Applied to dictation "
+                         "exactly as written, whole words only.",
+                         "واحد في كل سطر، الخطأ = الصواب. يُطبَّق على الإملاء "
+                         "كما كتبته تمامًا، وعلى الكلمات الكاملة فقط."),
     "mic_default": ("System default", "الافتراضي في النظام"),
     "btn_dictation_check": ("Check dictation", "فحص الإملاء"),
     "help_dictation_check": ("Records three seconds, measures it, and writes "
@@ -585,6 +590,14 @@ cursor. The work happens while you are still speaking, so the wait after you
 press stop is only for the last phrase - about a second or two.
 A tone marks each change as well as the spoken word, because a tone arrives
 immediately and speech waits for the screen reader to be free.
+You can change language in the middle of a sentence. The program finds where
+one language stops and the next begins and writes each part in its own script,
+so Arabic stays in Arabic letters and English in Latin ones.
+What it does not do is rewrite what you said. Hesitation sounds are removed and
+a word the model repeated three times is collapsed, but a sentence you
+corrected yourself is written the way you said it.
+If a name always comes out wrong, put it in Settings under Always correct, one
+per line, as wrong = right. Those replacements are applied exactly as written.
 If nothing is written, open Settings and press Check dictation. It records
 three seconds, measures them, and writes back what it heard, with a sentence
 for anything that is wrong. Windows can report a microphone as working while
@@ -646,7 +659,27 @@ carries on from where it stopped.
 الإعدادات: يفتح نافذة الإعدادات.
 قراءة الحالة: ينطق ما يجري الآن ونسبة التقدّم والوقت المتوقع.
 إلغاء العمل الجاري: يوقف التفريغ. ما تم إنجازه يبقى محفوظًا.
+بدء وإيقاف الإملاء: تتكلم بدل ما تكتب. التفاصيل بالأسفل.
 كل الاختصارات قابلة للتغيير من الإعدادات.
+
+الإملاء
+اضغط اختصار الإملاء مرة واحدة فيقول لك البرنامج «ابدأ الكلام». تكلّم بشكل
+طبيعي. اضغط نفس الاختصار مرة أخرى فيُكتب كلامك عند مؤشر الكتابة. العمل يجري
+وأنت ما زلت تتكلم، فالانتظار بعد الإيقاف يكون على آخر جملة فقط.
+مع كل تغيّر في الحالة نغمة قصيرة إلى جانب الكلام المنطوق، لأن النغمة تصل
+فورًا بينما الكلام ينتظر فراغ قارئ الشاشة.
+تقدر تغيّر اللغة في نص الجملة. البرنامج يلاقي مكان تغيّر اللغة ويكتب كل جزء
+بحروفه، فالعربي يفضل عربي والإنجليزي يفضل لاتيني.
+واللي مابيعملهوش إنه يعيد صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي
+كرّرها النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
+ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
+كل سطر بالشكل: الخطأ = الصواب. التصحيحات دي بتتطبّق حرفيًا زي ما كتبتها.
+وإذا لم يُكتب شيء، افتح الإعدادات واضغط «فحص الإملاء». يسجّل ثلاث ثوانٍ،
+يقيسها، ويكتب لك ما سمعه، ومع كل مشكلة جملة تقول ما تفعله. ويندوز قد يقول إن
+الميكروفون يعمل بينما هو لا يسجّل شيئًا، ولهذا الفحص يسجّل فعلًا بدل أن يقرأ
+الإعدادات.
+انتبه أن Ctrl+Shift+D هو أيضًا اختصار الوورد للتسطير المزدوج. وطول ما صدى
+شغّال فالاختصار له. غيّره من الإعدادات إن كنت تفضّل اختصار الوورد.
 
 ملاحظات تهمّ مستخدمي قارئ الشاشة
 يُدرج النص مرة واحدة في النهاية، لا تدريجيًا، حتى لا يتحرك مؤشر القراءة

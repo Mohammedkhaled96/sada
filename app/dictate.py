@@ -123,6 +123,7 @@ class DictationController:
             remove_fillers=settings.dictation_remove_fillers,
             language=None if settings.language == "auto" else settings.language,
             hotwords=settings.hotwords,
+            corrections=settings.dictation_corrections,
         )
         self._stop.clear()
         self._abandoned = False

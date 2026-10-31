@@ -215,6 +215,11 @@ class SettingsDialog(wx.Dialog):
         self.mic.SetSelection(self._mic_names.index(saved)
                               if saved in self._mic_names else 0)
         _row(g4, dicbox, t("field_mic"), self.mic)
+        self.corrections = wx.TextCtrl(
+            dicbox, value=settings.dictation_corrections,
+            style=wx.TE_MULTILINE, size=(-1, 70))
+        _row(g4, dicbox, t("field_corrections"), self.corrections,
+             t("help_corrections"))
         dic.Add(g4, 0, wx.EXPAND | wx.ALL, PAD)
 
         self.remove_fillers = wx.CheckBox(dicbox, label=t("check_remove_fillers"))
@@ -380,6 +385,7 @@ class SettingsDialog(wx.Dialog):
         s.rtl_auto = self.rtl_auto.GetValue()
         s.save_side_files = self.side_files.GetValue()
         s.dictation_remove_fillers = self.remove_fillers.GetValue()
+        s.dictation_corrections = self.corrections.GetValue().strip()
         s.dictation_device = ("" if self.mic.GetSelection() <= 0
                               else self._mic_names[self.mic.GetSelection()])
         for name, ctrl in keys.items():

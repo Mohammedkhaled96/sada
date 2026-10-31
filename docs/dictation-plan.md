@@ -55,15 +55,35 @@ We do not improve it.**
 
 | Rambler feature | Us | How |
 |---|---|---|
-| Automatic punctuation and capitalisation | **Yes, already** | Whisper emits both natively |
-| Mixing languages in one sentence | **Yes** | Per-segment language detection, never one forced language |
-| Names and jargon spelled right | **Yes** | The `hotwords` setting — which is currently dropped, see §6 |
+| Automatic punctuation and capitalisation | **Yes** | Whisper emits both natively |
+| Mixing languages in one sentence | **Yes** | `engine/langmap.py` — the segment is split at the language boundary *before* it is transcribed |
+| Names and jargon spelled right | **Yes** | `hotwords` as `initial_prompt`, plus the end of what has already been written |
+| A personal dictionary | **Yes, better** | A list of replacements the user writes, applied literally — nothing is inferred |
 | Filler removal ("أمم", "um") | **Carefully** | Exact words on a short list, never repetition regexes — §5 |
+| Stutters and repeated phrases | **Yes** | `engine/cleanup.py`, and only where the decoder, not the speaker, repeated itself |
 | Single undo of the whole insertion | **Yes, already** | `wordio.insert_transcript` |
 | Screen reader labels and focus | **Yes, better** | Native Win32 + the NVDA/JAWS APIs we already use |
 | Releasing the engine when idle | **Yes** | PixelBoard issue #3 was exactly this |
 | Rewriting self-corrections ("two — no, three") | **No, deliberately** | Needs an LLM rewriting your words; see §1 |
 | Server-side AI intent, tone switching, proofreading | **No** | Offline is the product |
+
+### Why mixing languages needs a split, not a better guess
+
+`language` is not a hint to Whisper. It decides once per call and writes the
+whole call in that script, so a sentence that changes language comes back
+transliterated — "the quarterly report" in Arabic letters. Detecting the
+language more cleverly cannot fix that, because there is only one answer per
+call to be had.
+
+So `engine/langmap.py` asks Silero where the phrases are, asks `tiny` what
+language each phrase is in, joins neighbouring phrases that agree into runs,
+and transcribes each run as its own call with its own language. Boundaries land
+in the pauses, never inside a phrase. Runs too short to be worth a window fold
+into the longer side, and a segment is capped at four calls however mixed it
+is.
+
+It costs nothing in the ordinary case: one language means one run, which is one
+call, which is what happened before.
 
 ## 3. Measured on this machine
 
@@ -179,14 +199,27 @@ mistake in the other direction.
 Whisper already punctuates and capitalises. What is left:
 
 1. **Trailing-silence hallucinations.** With a tight window the decoder can run
-   on. Guard: keep the temperature fallback, reject segments whose compression
-   ratio or `no_speech_prob` exceeds threshold, and keep the 3 s headroom.
-2. **Fillers.** Exact, whole-word matches from a short per-language list, applied
-   only to a segment that stands alone between pauses. **No repetition regexes.**
-   The last attempt's `[اوي]{3,}` deleted the word **راوي**, and `^m{2,}$` ate the
-   "mm" in "5 mm". The test corpus of words that must survive gets written
-   before the filter does.
-3. **Nothing else.** No rephrasing, no self-correction, no tone. §1.
+   on. Guards: a segment whose compression ratio or `no_speech_prob` is out of
+   range, or which begins after the audio ended, is thrown away.
+2. **Fillers.** Exact, whole-word matches from a short per-language list.
+   **No repetition regexes.** The last attempt's `[اوي]{3,}` deleted the word
+   **راوي**, and `^m{2,}$` ate the "mm" in "5 mm". More than half of the filler
+   tests assert what survives.
+3. **Repetition the decoder produced.** A word three or more times in a row
+   leaves one; a phrase of two or more words repeated immediately after itself
+   is collapsed. Twice is left alone, because "very very", "لا لا" and "no no"
+   are things people say.
+4. **The user's own replacements.** `wrong = right`, one per line, whole words,
+   applied literally to the finished text. A speech model mishears a particular
+   name the same way every time, and the person dictating is the one who knows
+   which way.
+5. **Nothing else.** No rephrasing, no self-correction, no tone. §1.
+
+The line is between *tidying what the model emitted* and *deciding what the
+speaker meant*. Everything above is the first. The second needs a language
+model, and PixelBoard's own source is the argument against letting one near
+this: Google's Rambler does it, and sometimes answers the user instead of
+transcribing them.
 
 ## 6. The verification the user asked for
 
