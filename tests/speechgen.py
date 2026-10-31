@@ -11,6 +11,8 @@ voices.
 """
 from __future__ import annotations
 
+import contextlib
+import os
 import tempfile
 import wave
 from pathlib import Path
@@ -39,6 +41,25 @@ def pick(*hints: str) -> int | None:
     return None
 
 
+@contextlib.contextmanager
+def _in_temp_dir():
+    """Speak from a scratch directory, not from the project.
+
+    The Arabic voice writes a pronunciation dictionary - Leila22k_HQ.dic -
+    into whatever the working directory happens to be, the first time it is
+    asked to say anything. Left alone it lands in the repository root, where
+    it is nothing to do with this program and has to be explained to anybody
+    who finds it. The voice can have it; it just cannot have it here.
+    """
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory(prefix="sada-speechgen-") as scratch:
+        os.chdir(scratch)
+        try:
+            yield Path(scratch)
+        finally:
+            os.chdir(here)
+
+
 def say(text: str, voice_index: int | None = None, rate: int = 0) -> np.ndarray:
     """One utterance, as 16 kHz mono float32."""
     import win32com.client
@@ -49,14 +70,15 @@ def say(text: str, voice_index: int | None = None, rate: int = 0) -> np.ndarray:
     speaker.Rate = rate
 
     path = Path(tempfile.gettempdir()) / f"sada-speechgen-{abs(hash(text))}.wav"
-    stream = win32com.client.Dispatch("SAPI.SpFileStream")
-    fmt = win32com.client.Dispatch("SAPI.SpAudioFormat")
-    fmt.Type = 22                                   # 16 kHz, 16 bit, mono
-    stream.Format = fmt
-    stream.Open(str(path), 3)                       # SSFMCreateForWrite
-    speaker.AudioOutputStream = stream
-    speaker.Speak(text)
-    stream.Close()
+    with _in_temp_dir():
+        stream = win32com.client.Dispatch("SAPI.SpFileStream")
+        fmt = win32com.client.Dispatch("SAPI.SpAudioFormat")
+        fmt.Type = 22                               # 16 kHz, 16 bit, mono
+        stream.Format = fmt
+        stream.Open(str(path), 3)                   # SSFMCreateForWrite
+        speaker.AudioOutputStream = stream
+        speaker.Speak(text)
+        stream.Close()
 
     with wave.open(str(path), "rb") as wav:
         raw = wav.readframes(wav.getnframes())
