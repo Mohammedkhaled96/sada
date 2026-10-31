@@ -72,12 +72,40 @@ _LOOKUP: list[tuple[str, str]] = sorted(
     ((name, glyph) for glyph, names in NAMES.items() for name in names),
     key=lambda pair: -len(pair[0]))
 
+# Counts, so "three smile face emoji" writes three of them. Digits and the
+# small numbers people actually say out loud - nobody dictates "put forty
+# seven heart emoji", and a list that tried to cover that would start
+# matching numbers that were part of the sentence.
+WORD_NUMBERS = {
+    "1": 1, "one": 1, "a": 1, "an": 1, "واحد": 1, "واحده": 1,
+    "2": 2, "two": 2, "اتنين": 2, "إثنين": 2, "اثنين": 2,
+    "3": 3, "three": 3, "تلاته": 3, "ثلاثه": 3, "تلات": 3, "ثلاث": 3,
+    "4": 4, "four": 4, "اربعه": 4, "أربعه": 4, "اربع": 4, "أربع": 4,
+    "5": 5, "five": 5, "خمسه": 5, "خمس": 5,
+    "6": 6, "six": 6, "سته": 6, "ست": 6,
+    "7": 7, "seven": 7, "سبعه": 7, "سبع": 7,
+    "8": 8, "eight": 8, "تمانيه": 8, "ثمانيه": 8, "تمان": 8,
+    "9": 9, "nine": 9, "تسعه": 9, "تسع": 9,
+    "10": 10, "ten": 10, "عشره": 10, "عشر": 10,
+}
+# However it is read, this many is the most that will be written. A speech
+# model mishears numbers, and a mishearing should cost a wrong count rather
+# than a thousand characters pasted into somebody's document.
+MAX_COUNT = 10
+
+_NUMBER_RE = "|".join(re.escape(n) for n in
+                      sorted(WORD_NUMBERS, key=len, reverse=True))
 _MARKER_RE = "|".join(re.escape(m) for m in MARKERS)
 _MARKS = re.compile(r"[ً-ْـ]")
 
 
+# Arabic-Indic digits, which is what a model writing Arabic usually produces
+# for a number that was said out loud.
+_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
 def _normalise(text: str) -> str:
-    text = _MARKS.sub("", text)
+    text = _MARKS.sub("", text).translate(_DIGITS)
     return (text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
             .replace("ة", "ه").replace("ى", "ي"))
 
@@ -89,12 +117,19 @@ def _patterns():
     first - "ايموجي ابتسامة" - and dictated speech does both in either
     language, so both are accepted everywhere.
     """
+    def count(group):
+        return rf"(?:(?P<{group}>{_NUMBER_RE})[\s\-]+)?"
+
     for name, glyph in _LOOKUP:
         spelled = re.escape(_normalise(name)).replace(r"\ ", r"[\s\-]+")
-        yield re.compile(rf"(?<!\w)(?:{_MARKER_RE})[\s\-]*(?:of[\s\-]+)?"
+        # "emoji" first, as English usually says it: "three smile face emoji",
+        # and Arabic the other way: "ايموجي ابتسامة", "٣ ايموجي قلب".
+        yield re.compile(rf"(?<!\w){count('before')}(?:{_MARKER_RE})[\s\-]*"
+                         rf"(?:of[\s\-]+)?{count('after')}"
                          rf"(?:a[\s\-]+|the[\s\-]+)?{spelled}(?!\w)",
                          re.IGNORECASE | re.UNICODE), glyph
-        yield re.compile(rf"(?<!\w){spelled}[\s\-]*(?:{_MARKER_RE})(?!\w)",
+        yield re.compile(rf"(?<!\w){count('before')}{spelled}[\s\-]*"
+                         rf"(?:{_MARKER_RE})(?!\w)",
                          re.IGNORECASE | re.UNICODE), glyph
 
 
@@ -127,7 +162,9 @@ def apply(text: str) -> str:
                 continue
             for i in range(start, end):
                 taken[i] = True
-            edits.append((start, end, glyph))
+            spoken = found.groupdict().get("before") or found.groupdict().get("after")
+            times = min(WORD_NUMBERS.get((spoken or "").lower(), 1), MAX_COUNT)
+            edits.append((start, end, glyph * times))
 
     for found in _BARE.finditer(lowered):
         start, end = found.span()

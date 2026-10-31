@@ -25,11 +25,10 @@ import wx
 
 from app import config, i18n
 from engine import models
-from app.config import (AI_PROVIDERS, DEVICES, INSERT_MODES, LANGUAGES, MODELS,
-                        UI_LANGUAGES,
-                        Settings, ai_labels, device_labels, format_hotkey,
-                        insert_labels, language_labels, model_labels,
-                        parse_hotkey, ui_language_labels)
+from app.config import (DEVICES, INSERT_MODES, LANGUAGES, MODELS, UI_LANGUAGES,
+                        Settings, device_labels, format_hotkey, insert_labels,
+                        language_labels, model_labels, parse_hotkey,
+                        ui_language_labels)
 from app.i18n import t
 
 PAD = 8
@@ -206,15 +205,6 @@ class SettingsDialog(wx.Dialog):
         self.mic.SetSelection(self._mic_names.index(saved)
                               if saved in self._mic_names else 0)
         _row(g4, dicbox, t("field_mic"), self.mic)
-        self.ai = wx.Choice(dicbox, choices=ai_labels())
-        self.ai.SetSelection(AI_PROVIDERS.index(settings.dictation_ai))
-        _row(g4, dicbox, t("field_ai"), self.ai, t("help_ai"))
-        self.ai_key = wx.TextCtrl(dicbox, value=settings.dictation_ai_key,
-                                  style=wx.TE_PASSWORD)
-        _row(g4, dicbox, t("field_ai_key"), self.ai_key, t("help_ai_key"))
-        self.show_key = wx.CheckBox(dicbox, label=t("check_show_key"))
-        self.show_key.Bind(wx.EVT_CHECKBOX, self.on_show_key)
-        _row(g4, dicbox, "", self.show_key)
         self.corrections = wx.TextCtrl(
             dicbox, value=settings.dictation_corrections,
             style=wx.TE_MULTILINE, size=(-1, 70))
@@ -382,8 +372,6 @@ class SettingsDialog(wx.Dialog):
         s.rtl_auto = self.rtl_auto.GetValue()
         s.save_side_files = self.side_files.GetValue()
         s.dictation_corrections = self.corrections.GetValue().strip()
-        s.dictation_ai = AI_PROVIDERS[self.ai.GetSelection()]
-        s.dictation_ai_key = self.ai_key.GetValue().strip()
         s.dictation_device = ("" if self.mic.GetSelection() <= 0
                               else self._mic_names[self.mic.GetSelection()])
         for name, ctrl in keys.items():
@@ -396,25 +384,6 @@ class SettingsDialog(wx.Dialog):
         config.save(s)              # also switches the active language
         self.EndModal(wx.ID_OK)
 
-
-    def on_show_key(self, _evt) -> None:
-        """Swap the key field between hidden and readable.
-
-        wx cannot turn TE_PASSWORD off on an existing control, so the field is
-        rebuilt in place. Worth it: a key that can never be read back cannot be
-        checked for a typo, which is the commonest reason one does not work.
-        """
-        value = self.ai_key.GetValue()
-        parent, sizer = self.ai_key.GetParent(), self.ai_key.GetContainingSizer()
-        style = 0 if self.show_key.GetValue() else wx.TE_PASSWORD
-        replacement = wx.TextCtrl(parent, value=value, style=style)
-        _set_accessible_name(replacement, t("field_ai_key").rstrip(":"))
-        replacement.SetHelpText(t("help_ai_key"))
-        sizer.Replace(self.ai_key, replacement)
-        self.ai_key.Destroy()
-        self.ai_key = replacement
-        sizer.Layout()
-        self.ai_key.SetFocus()
 
     # ------------------------------------------------------ dictation check
     def on_dictation_check(self, _evt) -> None:
@@ -432,11 +401,8 @@ class SettingsDialog(wx.Dialog):
                 if str(device) == wanted:
                     index = device.index
                     break
-        dlg = DictationCheckDialog(
-            self, self.GetParent(), index, on_announce=self.on_announce,
-            ai=(AI_PROVIDERS[self.ai.GetSelection()],
-                self.ai_key.GetValue().strip(),
-                self.settings.dictation_ai_model))
+        dlg = DictationCheckDialog(self, self.GetParent(), index,
+                                   on_announce=self.on_announce)
         dlg.ShowModal()
         dlg.Destroy()
 
@@ -683,9 +649,6 @@ class SettingsDialog(wx.Dialog):
         self.k_dictate.SetValue(d.hotkey_dictate)
         self.mic.SetSelection(0)
         self.corrections.SetValue(d.dictation_corrections)
-        self.ai.SetSelection(AI_PROVIDERS.index(d.dictation_ai))
-        # The key is not cleared. Reset puts the settings back; it is not a
-        # way to lose something the user pasted in from somewhere else.
         self.speak.SetValue(d.speak)
         self.progress_every.SetValue(d.speak_progress_every)
         self.sapi.SetValue(d.speak_via_sapi)
@@ -746,14 +709,12 @@ class DictationCheckDialog(wx.Dialog):
     user which setting to change.
     """
 
-    def __init__(self, parent, frame, device_index=None, on_announce=None,
-                 ai=None):
+    def __init__(self, parent, frame, device_index=None, on_announce=None):
         super().__init__(parent, title=t("dictation_check_title"),
                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         apply_direction(self)
         self.frame = frame
         self.device_index = device_index
-        self.ai = ai
         self.on_announce = on_announce or (lambda text: None)
         self._thread = None
 
@@ -798,7 +759,7 @@ class DictationCheckDialog(wx.Dialog):
 
         failed = 0
         try:
-            for step in diagnose.run(self.frame, self.device_index, self.ai):
+            for step in diagnose.run(self.frame, self.device_index):
                 if step.ok is False:
                     failed += 1
                 wx.CallAfter(self._append, step)

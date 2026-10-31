@@ -78,7 +78,7 @@ def consent() -> dict[str, str]:
     return found
 
 
-def run(frame, device_index: int | None = None, ai=None):
+def run(frame, device_index: int | None = None):
     """Yield a Step at a time. Runs off the GUI thread - it records audio."""
     # -- 1. is there anything to record with -------------------------------
     try:
@@ -184,40 +184,7 @@ def run(frame, device_index: int | None = None, ai=None):
     yield Step(t("chk_hotkey"), taken, wanted,
                t("chk_hotkey_fix", key=wanted))
 
-    # -- 9. is the language model reachable, if one is turned on ----------
-    # From what is on screen, not from what was last saved: somebody who has
-    # just pasted a key wants to know about that key, and making them save and
-    # reopen first would be the opposite of a diagnostic.
-    provider, key, model = ai or (frame.settings.dictation_ai,
-                                  frame.settings.dictation_ai_key,
-                                  frame.settings.dictation_ai_model)
-    if provider == "local":
-        yield Step(t("chk_ai"), None, t("chk_ai_off"))
-    else:
-        from engine import cloudstt
-
-        # The engine that actually transcribes, not the text repairer. This
-        # read "if provider == 'gemini'" after the setting was renamed to
-        # "auto", so it quietly tested the wrong thing and reported that
-        # Google could not be reached.
-        engine = cloudstt.make(provider, key, model)
-        if not engine.available:
-            yield Step(t("chk_ai"), None, t("chk_ai_no_key"))
-            return
-
-        # Said before the request, because the request may well succeed: an
-        # OAuth token is accepted here and then expires, so dictation works
-        # today and stops tomorrow with nothing to point at.
-        shape = cloudstt.key_shape(key)
-        if shape != "ok":
-            yield Step(t("chk_key_shape"), False,
-                       key[:3] + "...", t("chk_key_shape_fix"))
-        try:
-            yield Step(t("chk_ai"), True, t("chk_ai_ok", model=engine.check()))
-        except Exception as exc:
-            yield Step(t("chk_ai"), False, "", t("chk_ai_fix", error=exc))
-
-    # -- 10. is there somewhere to write -----------------------------------
+    # -- 9. is there somewhere to write -----------------------------------
     from app import wordio
 
     try:

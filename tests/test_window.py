@@ -22,7 +22,6 @@ sys.path.insert(0, str(ROOT))
 
 from engine import window
 from engine.audio import decode_audio
-from engine.dictation import PAST_END_S
 
 SR = 16000
 failures: list[str] = []
@@ -98,7 +97,7 @@ else:
                 drops it before the text is ever assembled."""
                 return " ".join(
                     s["text"].strip() for s in result["segments"]
-                    if s["start"] < clip_s - PAST_END_S).split()
+                    if s["start"] < clip_s - 0.2).split()
 
             a, b = words(full), words(short)
 

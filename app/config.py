@@ -30,21 +30,10 @@ SETTINGS_FILE = paths.SETTINGS_FILE
 LEGACY_SETTINGS_FILE = paths.LEGACY_STATE_DIR / "settings.json"
 
 MODELS = ["turbo", "large-v3", "medium", "small"]
-# What writes the dictation down.
-#   auto  - Google if there is a key that works, this machine otherwise. The
-#           choice is made per dictation, so an expired key, a dead connection
-#           or a refused reply falls through to the local model instead of
-#           failing. This is the default.
-#   local - never Google, whatever key is saved. Nothing leaves the machine.
-AI_PROVIDERS = ["auto", "local"]
 DEVICES = ["auto", "cuda", "cpu"]
 INSERT_MODES = ["cursor", "end", "new"]
 LANGUAGES = ["auto", "ar", "en", "fr", "de", "es", "tr", "ur", "fa"]
 UI_LANGUAGES = i18n.UI_LANGUAGES
-
-
-def ai_labels() -> list[str]:
-    return [i18n.t(f"ai_{p}") for p in AI_PROVIDERS]
 
 
 def model_labels() -> list[str]:
@@ -93,18 +82,6 @@ class Settings:
     # one who knows which way, so they say it once instead of fixing it by
     # hand after every dictation.
     dictation_corrections: str = ""
-    # See AI_PROVIDERS.
-    dictation_ai: str = "auto"
-    # Kept in this file as written, so it can be edited here as well as in
-    # Settings. That is a deliberate trade and it is the user's: a key that is
-    # readable is a key they can move, copy and replace, and this file sits in
-    # the program's own folder rather than anywhere shared.
-    dictation_ai_key: str = ""
-    # Empty means "ask Google which models exist and pick one". Hardcoding a
-    # name is what broke this the first time: gemini-2.0-flash stopped being
-    # offered, and every request came back 404 while the key was perfectly
-    # good. The name that is found is written back here as a cache.
-    dictation_ai_model: str = ""
     dictation_device: str = ""              # empty means the system default
 
     # shortcuts
@@ -136,17 +113,6 @@ class Settings:
             self.language = "auto"
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
-        if self.dictation_ai not in AI_PROVIDERS:
-            self.dictation_ai = "auto"
-        # A cached model name that is no longer one we would choose is cleared
-        # rather than kept. Google withdraws names, and a stale one in this
-        # file would 404 on every request for ever - which looks to the user
-        # exactly like their key being refused.
-        if self.dictation_ai_model:
-            from engine.cloudstt import CANDIDATES
-
-            if self.dictation_ai_model not in CANDIDATES:
-                self.dictation_ai_model = ""
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
@@ -174,52 +140,6 @@ def _source_file() -> Path:
     return SETTINGS_FILE
 
 
-_DPAPI = "dpapi:"
-
-
-def protect(secret: str) -> str:
-    """Encrypt the API key for this Windows user before it is written down.
-
-    settings.json sits in the program folder and is ordinary readable text.
-    A key the user pastes in is theirs, costs money if it leaks, and would
-    otherwise be sitting in a file that anything on the machine can read.
-    DPAPI ties it to this user account, so a copy of the file is useless
-    elsewhere.
-    """
-    if not secret:
-        return ""
-    try:
-        import base64
-
-        import win32crypt
-
-        blob = win32crypt.CryptProtectData(secret.encode("utf-8"), "Sada",
-                                           None, None, None, 0)
-        return _DPAPI + base64.b64encode(blob).decode("ascii")
-    except Exception:
-        # Without DPAPI the choice is plain text or no feature at all. It is
-        # stored plainly and labelled as such rather than silently pretending.
-        return "plain:" + secret
-
-
-def unprotect(stored: str) -> str:
-    if not stored:
-        return ""
-    if stored.startswith("plain:"):
-        return stored[len("plain:"):]
-    if not stored.startswith(_DPAPI):
-        return stored               # written by hand, or by an older version
-    try:
-        import base64
-
-        import win32crypt
-
-        blob = base64.b64decode(stored[len(_DPAPI):])
-        return win32crypt.CryptUnprotectData(blob, None, None, None, 0)[1].decode("utf-8")
-    except Exception:
-        return ""
-
-
 def load() -> Settings:
     """Also applies the stored interface language, so every string produced
     after this call is in the user's chosen language.
@@ -233,7 +153,6 @@ def load() -> Settings:
         raw = json.loads(source.read_text(encoding="utf-8"))
         known = {f.name for f in fields(Settings)}
         s = Settings(**{k: v for k, v in raw.items() if k in known}).validate()
-        s.dictation_ai_key = unprotect(s.dictation_ai_key)   # from older files
     except Exception:
         s = Settings()
     i18n.set_language(s.ui_language)

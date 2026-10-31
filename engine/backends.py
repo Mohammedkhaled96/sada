@@ -20,7 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from engine.paths import MODELS_DIR
-from engine.window import BACKEND_LOCK
+from engine.window import BACKEND_LOCK, short_window
 
 # name -> (faster-whisper repo id, openai checkpoint name)
 MODEL_NAMES = {
@@ -172,11 +172,14 @@ class OpenAIWhisperBackend:
             if end_s <= skip_before:
                 continue                     # already done by an earlier run
 
-            # Dictation encodes a shorter window by patching module-level
-            # constants in the whisper package, which this call reads. Taking
-            # the same lock keeps the two from seeing each other's settings;
-            # it is per chunk, so neither blocks the other for long.
-            with BACKEND_LOCK:
+            # A short chunk is encoded in a window just long enough for it.
+            # Whisper pads every clip to thirty seconds, so a four-second
+            # dictation otherwise costs what a twenty-second one does -
+            # measured, 17.9 s against 23.3 s on a CPU. Anything longer than
+            # the short windows hold falls back to the full thirty, so a
+            # normal file is untouched. The lock is here because the window is
+            # process-wide state inside the whisper package.
+            with BACKEND_LOCK, short_window(self.model, end_s - start_s):
                 result = self.model.transcribe(
                     audio[start_sample:end_sample], language=language,
                     task="transcribe", fp16=self._fp16, **clean,

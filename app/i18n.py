@@ -376,6 +376,10 @@ S: dict[str, tuple[str, str]] = {
     "say_dictation_start": ("start typing", "ابدأ الكلام"),
     "say_dictation_stop": ("stop", "توقف"),
     "say_dictation_done": ("{words} words written.", "كُتبت {words} كلمة."),
+    "say_dictation_writing": ("Recorded {seconds} seconds. Writing it now.",
+                              "تم تسجيل {seconds} ثانية. جارٍ كتابتها الآن."),
+    "say_dictation_too_short": ("That was too short to write anything.",
+                                "ده كان أقصر من إن يتكتب منه حاجة."),
     "say_dictation_nothing": ("Nothing was recognised. Say it again.",
                               "لم يُفهم أي كلام. قل ما تريد مرة أخرى."),
     "say_dictation_not_hearing": ("I cannot hear anything. Open Settings and "
@@ -396,61 +400,7 @@ S: dict[str, tuple[str, str]] = {
 
     # ------------------------------------------------------- dictation check
     "group_dictation": ("Dictation", "الإملاء"),
-    "check_show_key": ("Show the key", "إظهار المفتاح"),
     "field_mic": ("Microphone:", "الميكروفون:"),
-    "field_ai": ("Dictation engine:", "محرّك الإملاء:"),
-    "ai_auto": ("Automatic - Google when the key works, this computer otherwise",
-                "تلقائي - جوجل عندما يعمل المفتاح، وهذا الجهاز عدا ذلك"),
-    "ai_local": ("Only this computer - nothing is sent anywhere",
-                 "هذا الجهاز فقط - لا يُرسل أي شيء لأي مكان"),
-    "help_ai": ("Automatic uses Google whenever the key below works, because "
-                "it is far better at spoken Arabic and at any language you "
-                "mix in - and it SENDS YOUR DICTATION to Google. With no key, "
-                "an expired key or no connection, this computer writes it "
-                "instead, every time, without you doing anything. Only this "
-                "computer never sends anything, whatever key is saved.",
-                "«تلقائي» يستخدم جوجل طول ما المفتاح تحت شغّال، لأنه أفضل "
-                "بكثير في العربية المحكية وفي أي لغة تخلطها - وهو **يرسل ما "
-                "تمليه** إلى جوجل. ولو مافيش مفتاح، أو المفتاح انتهى، أو "
-                "مافيش نت، الجهاز ده بيكتبها بدله في كل مرة من غير ما تعمل "
-                "أي حاجة. و«هذا الجهاز فقط» مابيبعتش حاجة خالص مهما كان "
-                "المفتاح محفوظ."),
-    "field_ai_key": ("Gemini API key:", "مفتاح Gemini:"),
-    "help_ai_key": ("From aistudio.google.com, starting with AIza. Saved in "
-                    "settings.json in the program folder, so you can edit it "
-                    "there too.",
-                    "من aistudio.google.com، ويبدأ بـ AIza. يُحفَظ في ملف "
-                    "settings.json في مجلد البرنامج، فتقدر تعدّله من هناك "
-                    "كمان."),
-    "chk_ai": ("Dictation engine", "محرّك الإملاء"),
-    "chk_ai_off": ("On this computer. Nothing is sent anywhere.",
-                   "على هذا الجهاز. لا يُرسل أي شيء لأي مكان."),
-    "chk_key_shape": ("The key looks like the right kind",
-                      "المفتاح شكله النوع الصحيح"),
-    "chk_key_shape_fix": (
-        "An AI Studio API key starts with AIza. A value starting with AQ. is "
-        "a temporary sign-in token: it works for about an hour and then "
-        "stops. In Google AI Studio open Get API key and copy the key itself.",
-        "مفتاح AI Studio بيبدأ بـ AIza. والقيمة اللي بتبدأ بـ AQ. دي رمز دخول "
-        "مؤقت: بيشتغل حوالي ساعة وبعدين بيقف. في Google AI Studio افتح "
-        "«Get API key» وانسخ المفتاح نفسه."),
-    "chk_ai_no_key": ("No key saved, so dictation writes on this computer. "
-                      "Paste a key from aistudio.google.com above to use "
-                      "Google.",
-                      "مافيش مفتاح محفوظ، فالإملاء بيتكتب على هذا الجهاز. "
-                      "الزق مفتاح من aistudio.google.com بالأعلى عشان "
-                      "تستخدم جوجل."),
-    "chk_ai_ok": ("Working, model {model}", "يعمل، النموذج {model}"),
-    "chk_ai_fix": ("The key was refused: {error}. Check it in Settings, or "
-                   "set AI repair to Off.",
-                   "رُفض المفتاح: {error}. راجعه في الإعدادات، أو اجعل "
-                   "الإصلاح بالذكاء الاصطناعي مغلقًا."),
-    "say_dictation_repaired": ("{words} words written and repaired.",
-                               "كُتبت {words} كلمة بعد الإصلاح."),
-    "say_dictation_fellback": ("Google could not be reached. {words} words "
-                               "written on this computer instead.",
-                               "تعذّر الوصول إلى جوجل. كُتبت {words} كلمة "
-                               "على هذا الجهاز بدلًا من ذلك."),
     "field_corrections": ("Always correct:", "تصحيحات دائمة:"),
     "help_corrections": ("One per line, wrong = right. Applied to dictation "
                          "exactly as written, whole words only.",
@@ -647,24 +597,11 @@ Say the name of an emoji followed by the word emoji - "smile face emoji",
 "thumbs up emoji", "ايموجي قلب" - and the emoji is written instead of the
 words. The word emoji has to be there, so a sentence about your heart keeps
 the word heart.
-To change language in the middle of a sentence, use the Google engine below.
-It hears the whole recording and writes each part in its own script. The
-engine on this computer writes a whole dictation in one language.
+Say a number before the name and you get that many: "put 3 smile face emoji"
+writes three of them, in English or Arabic, up to ten.
 On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
-Settings has a Dictation engine, set to Automatic. With a Google key saved it
-uses Google, which is far better at spoken Arabic and at any language you mix
-in - and it sends your dictation to Google. With no key, an expired key or no
-connection it writes on this computer instead, every time, without you doing
-anything. Set it to Only this computer and it never sends anything at all.
-The key comes from aistudio.google.com and starts with AIza. Paste it into
-Settings, or edit settings.json in the program folder. Show the key beside the
-box lets you read it back to check it.
-Google also applies corrections you say out loud: "at six thirty, no, make it
-eight" is written as eight. If Google cannot be reached the local model writes
-it and the program says so, and a reply that looks like a rewrite rather than
-a transcript is thrown away.
 If a name always comes out wrong, put it in Settings under Always correct, one
 per line, as wrong = right. Those replacements are applied exactly as written.
 If nothing is written, open Settings and press Check dictation. It records
@@ -733,29 +670,18 @@ carries on from where it stopped.
 
 الإملاء
 اضغط اختصار الإملاء مرة واحدة فيقول لك البرنامج «ابدأ الكلام». تكلّم بشكل
-طبيعي. اضغط نفس الاختصار مرة أخرى فيُكتب كلامك عند مؤشر الكتابة. العمل يجري
-وأنت ما زلت تتكلم، فالانتظار بعد الإيقاف يكون على آخر جملة فقط.
+طبيعي. اضغط نفس الاختصار مرة أخرى فيُكتب كلامك عند مؤشر الكتابة. وبعدها نافذة
+البرنامج بتوريك نفس التقدّم اللي بيظهر وقت تفريغ ملف: وصل لفين، والوقت
+المتبقّي، والسرعة، واسم النموذج.
 مع كل تغيّر في الحالة نغمة قصيرة إلى جانب الكلام المنطوق، لأن النغمة تصل
 فورًا بينما الكلام ينتظر فراغ قارئ الشاشة.
 قول اسم الإيموجي ومعاه كلمة «ايموجي» — «ايموجي قلب»، «ايموجي ابتسامة»،
 «thumbs up emoji» — فيتكتب الإيموجي نفسه بدل الكلام. ولازم كلمة «ايموجي»
 تكون موجودة، فجملة فيها كلمة «قلبي» بتفضل زي ما هي.
-ولو عايز تغيّر اللغة في نص الجملة، استخدم محرّك جوجل اللي تحت. هو بيسمع
-التسجيل كله ويكتب كل جزء بحروفه. أما المحرّك اللي على الجهاز فبيكتب الإملاء
-كله بلغة واحدة.
+وقول رقم قبل الاسم فيكتب لك العدد ده: «حط ٣ ايموجي قلب» تكتب تلات قلوب،
+بالعربي أو بالإنجليزي، لحد عشرة.
 ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
 النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
-في الإعدادات «محرّك الإملاء» ومضبوط على «تلقائي». لو في مفتاح جوجل محفوظ
-بيستخدم جوجل، وهو أفضل بكثير في العربي المحكي وفي أي لغة تخلطها — وبيبعت
-إملاءك لجوجل. ولو مافيش مفتاح، أو المفتاح انتهى، أو مافيش نت، بيكتب على
-الجهاز ده في كل مرة من غير ما تعمل حاجة. ولو خليته «هذا الجهاز فقط» مابيبعتش
-أي حاجة خالص.
-المفتاح من aistudio.google.com وبيبدأ بـ AIza. الزقه في الإعدادات، أو عدّله
-في ملف settings.json في مجلد البرنامج. و«إظهار المفتاح» جنب الخانة بيخليك
-تقراه عشان تتأكد منه.
-وجوجل كمان بيطبّق التصحيحات اللي بتقولها بصوتك: «الساعة ستة ونص، لا لا خليها
-تمانية» تتكتب تمانية. ولو جوجل ماردّش، النموذج المحلي بيكتبها والبرنامج بيقول
-لك، والرد اللي شكله إعادة كتابة مش تفريغ بيتترمي.
 ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
 كل سطر بالشكل: الخطأ = الصواب. التصحيحات دي بتتطبّق حرفيًا زي ما كتبتها.
 وإذا لم يُكتب شيء، افتح الإعدادات واضغط «فحص الإملاء». يسجّل ثلاث ثوانٍ،
