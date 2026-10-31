@@ -226,6 +226,84 @@ else:
             print(f"        [{row['language']}] {row['text'].strip()[:58]}")
 
 
+# ------------------------------------------- tidying with a local model
+print("\n--- correcting the text with a local language model ---")
+
+from engine import refine                                          # noqa: E402
+
+RAW = "يعني انا رحت المكتب امبارح اه وقابلت المدير وقالي ان التقرير لازم يخلص"
+GOOD = "أنا رحت المكتب امبارح، وقابلت المدير وقال لي إن التقرير لازم يخلص."
+
+
+def transport(answer, models=("qwen3:4b", "llama3.1:8b")):
+    def go(path, body):
+        if path == "/api/tags":
+            return {"models": [{"name": m} for m in models]}
+        go.body = body
+        return {"message": {"content": answer}}
+    return go
+
+
+sent = transport(GOOD)
+refiner = refine.OllamaRefiner(transport=sent)
+check("it picks the best installed model, not the first",
+      refiner.choose() == "qwen3:4b", refiner.choose())
+result = refiner.refine(RAW)
+check("a correction is accepted", result.text == GOOD and result.changed,
+      result.reason or result.text[:40])
+check("the temperature is low: correcting, not writing",
+      sent.body["options"]["temperature"] <= 0.2)
+check("the model is kept loaded between dictations",
+      sent.body["keep_alive"] == refine.KEEP_ALIVE, sent.body["keep_alive"])
+check("reasoning is turned off, there is nothing to reason about",
+      refine.NO_THINK in sent.body["messages"][1]["content"])
+system = sent.body["messages"][0]["content"]
+check("it is told not to change the dialect", "لا تغيّر اللهجة" in system)
+check("nor to translate or explain",
+      "لا تترجم" in system and "Do not translate" in system)
+check("nor to answer a question in the text", "ولا تجب على أي سؤال" in system)
+
+print("\n--- and what it refuses, keeping what was said ---")
+for label, answer in [
+    ("an answer instead of a correction", "بالطبع! إليك النص المصحح: " + GOOD),
+    ("a translation", "I went to the office yesterday and met the manager."),
+    ("an essay built from it", GOOD + " " + GOOD + " " + GOOD),
+    ("most of the text missing", "التقرير"),
+    ("nothing at all", "   "),
+]:
+    res = refine.OllamaRefiner(transport=transport(answer)).refine(RAW)
+    check(f"refuses {label}", res.text == RAW and not res.changed,
+          res.reason or f"ACCEPTED {res.text[:30]}")
+
+check("a reasoning block is stripped rather than written into the document",
+      refine.strip_thinking("<think>hmm</think>" + GOOD) == GOOD)
+
+print("\n--- and it is optional ---")
+check("with nothing installed it does nothing",
+      not refine.OllamaRefiner(transport=transport(GOOD, models=())).available)
+check("and the text passes through untouched",
+      refine.NoRefiner().refine(RAW).text == RAW)
+check("turning it off gives the same",
+      not refine.make(False).available)
+check("it is on by default, because it costs nothing when absent",
+      config.Settings().refine_text)
+
+# A recording of a meeting is evidence. It is transcribed, not improved.
+jobs_source = (ROOT / "app" / "jobs.py").read_text(encoding="utf-8")
+check("a job does not tidy unless it is asked to",
+      "refine: bool = False" in jobs_source)
+check("and only dictation asks",
+      "refine=s.refine_text" in (ROOT / "app" / "dictate.py").read_text(encoding="utf-8"))
+
+from engine import paths                                           # noqa: E402
+
+check("the language model lives apart from the speech models",
+      paths.NLM_DIR != paths.MODELS_DIR and paths.NLM_DIR.name == "nlm",
+      f"{paths.NLM_DIR.name} vs {paths.MODELS_DIR.name}")
+check("and is not committed",
+      "nlm/" in (ROOT / ".gitignore").read_text(encoding="utf-8"))
+
+
 # ------------------------------------------------------------- local only
 print("\n--- nothing leaves the machine ---")
 

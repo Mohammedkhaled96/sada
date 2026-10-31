@@ -212,6 +212,11 @@ class SettingsDialog(wx.Dialog):
              t("help_corrections"))
         dic.Add(g4, 0, wx.EXPAND | wx.ALL, PAD)
 
+        self.refine_text = wx.CheckBox(dicbox, label=t("check_refine"))
+        self.refine_text.SetValue(settings.refine_text)
+        dic.Add(self.refine_text, 0, wx.LEFT | wx.RIGHT, PAD)
+        _hint(dic, dicbox, t("help_refine"))
+
         self.btn_check = wx.Button(dicbox, label=t("btn_dictation_check"))
         self.btn_check.Bind(wx.EVT_BUTTON, self.on_dictation_check)
         dic.Add(self.btn_check, 0, wx.ALL, PAD)
@@ -372,6 +377,7 @@ class SettingsDialog(wx.Dialog):
         s.rtl_auto = self.rtl_auto.GetValue()
         s.save_side_files = self.side_files.GetValue()
         s.dictation_corrections = self.corrections.GetValue().strip()
+        s.refine_text = self.refine_text.GetValue()
         s.dictation_device = ("" if self.mic.GetSelection() <= 0
                               else self._mic_names[self.mic.GetSelection()])
         for name, ctrl in keys.items():
@@ -649,6 +655,7 @@ class SettingsDialog(wx.Dialog):
         self.k_dictate.SetValue(d.hotkey_dictate)
         self.mic.SetSelection(0)
         self.corrections.SetValue(d.dictation_corrections)
+        self.refine_text.SetValue(d.refine_text)
         self.speak.SetValue(d.speak)
         self.progress_every.SetValue(d.speak_progress_every)
         self.sapi.SetValue(d.speak_via_sapi)

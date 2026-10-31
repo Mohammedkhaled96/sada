@@ -7,6 +7,11 @@ one document for it.
 Everything runs on the machine it is installed on. Nothing is sent anywhere,
 there is no key to obtain, no account, and no setting that would change that.
 
+```
+Ctrl+Shift+D ─► record ─► Whisper ─► tidy up ─► local model ─► Word
+                (mic)     (models/)  (rules)    (nlm/, optional)
+```
+
 ---
 
 ## 1. What this was modelled on, and what could not be taken from it
@@ -228,7 +233,93 @@ This runs with no network and no language model, like everything else here.
 
 ---
 
-## 6. What else happens to the text
+## 6. Correcting the text with a local language model
+
+Optional, local, and off the moment it is not there.
+
+Whisper writes down what it heard. It does not punctuate a long sentence the
+way a typist would, it keeps every "يعني" and "اه", and it has no idea that
+the word it just wrote is spelled differently three lines up. A small language
+model running on the same machine fixes all three, and `engine/refine.py` is
+how it is reached.
+
+### What it needs, and what happens without it
+
+It talks to **Ollama** on `127.0.0.1:11434`. With Ollama absent, or no model
+pulled, or the server stopped, `available` is False and dictation behaves
+exactly as it does with the box unticked. There is nothing to configure before
+it works and nothing to switch off after.
+
+```
+ollama pull qwen3:4b
+```
+
+Models are kept in **`nlm/`**, not `models/`. The speech checkpoints and the
+language model are fetched by different tools, sized in different units and
+deleted for different reasons; somebody clearing one must not take the other
+with it. Point Ollama at it with `OLLAMA_MODELS`.
+
+### Which model
+
+Picked automatically from what is installed, best first, so pulling a better
+one is the whole of the upgrade.
+
+| Model | |
+|---|---|
+| `qwen3:8b` | Best Arabic of the practical sizes. Wants a GPU. ~5-6 GB |
+| `falcon3:7b` | Arabic-native alternative. ~5 GB |
+| **`qwen3:4b`** | **The one for a CPU-only machine.** Answers in seconds |
+| `qwen2.5`, `gemma2`, `llama3.1` | Fallbacks if one of those is already there |
+
+Jais 30B has the best Arabic of all and needs about 20 GB of VRAM. It is not
+on the list because a dictation tool that needs a workstation is not a
+dictation tool.
+
+A model that is installed but not on the list is used anyway when it is the
+only one: somebody who pulled a model on purpose meant to use it.
+
+### What it is told
+
+The prompt is in `engine/refine.SYSTEM_PROMPT`, in Arabic and English, and it
+is short on purpose — a long prompt is a model given more ways to be creative.
+Correct spelling, punctuation and grammar; remove hesitation words and
+unintended repetition; **keep the meaning, the style and the dialect, and
+never turn colloquial speech into formal writing**; do not translate,
+summarise, explain, or answer anything in the text; write each language in its
+own script; return only the corrected text.
+
+Temperature `0.1`. Qwen3 is told `/no_think`, because it reasons out loud
+otherwise and there is nothing to reason about in fixing a comma — and any
+reasoning block that arrives anyway is stripped rather than written into the
+document. `keep_alive` is 30 minutes, so a second dictation a minute later
+does not pay the load again.
+
+One paragraph per request, not the whole dictation.
+
+### And it is checked, not trusted
+
+The same line as everywhere else here: tidying what the recogniser produced is
+in scope, deciding what the speaker meant is not. The reply is thrown away and
+the original kept when it
+
+- opens like an assistant — "إليك النص المصحح", "بالطبع", "Here is";
+- has grown or shrunk beyond what a correction explains;
+- has changed script, which is a translation wearing a correction's clothes.
+
+### It never touches a file you transcribe
+
+The job carries a `refine` flag that only dictation sets. A recording of a
+meeting is evidence: it is transcribed, not improved.
+
+### What it costs
+
+Seconds, on a CPU. That is why the job reports **Correcting the text** as its
+own state - a progress window sitting at "transcribing, 100 percent" while
+something else happens is a window that looks hung.
+
+---
+
+## 7. What else happens to the text
 
 In order, after the model has written it and before it reaches Word:
 
@@ -263,7 +354,7 @@ argument against letting one near a document the user cannot see.
 
 ---
 
-## 7. Making sure it works: the dictation check
+## 8. Making sure it works: the dictation check
 
 Settings → Dictation → **Check dictation**. It **records and measures**;
 reading the Windows settings is not enough. On the machine this was developed
@@ -298,7 +389,7 @@ interface most likely to work.
 
 ---
 
-## 8. Accessibility
+## 9. Accessibility
 
 The intended users are blind and use NVDA or JAWS. These are constraints, not
 features added afterwards.
@@ -324,7 +415,7 @@ features added afterwards.
 
 ---
 
-## 9. Known conflict
+## 10. Known conflict
 
 `Ctrl+Shift+D` is Word's own shortcut for double underline. A global hotkey
 takes it before Word sees it, so while Sada is running, Sada gets it. This was
@@ -334,12 +425,13 @@ when Windows refuses it.
 
 ---
 
-## 10. Settings that affect voice typing
+## 11. Settings that affect voice typing
 
 | Setting | |
 |---|---|
 | **Microphone** | Which input to record from. The system default unless chosen. |
-| **Always correct** | `wrong = right`, one per line. §5. |
+| **Always correct** | `wrong = right`, one per line. §7. |
+| **Correct with a local model** | §6. On by default; does nothing without Ollama. |
 | **Model** | The same model that transcribes files. One list, one choice. |
 | **Audio language** | Automatic unless set. A set language is passed straight to the model and skips detection. |
 | **Names and terms** | Fed to the model as context, so a name it would otherwise spell by sound is already in front of it. |
@@ -348,7 +440,7 @@ when Windows refuses it.
 
 ---
 
-## 11. A bug worth recording
+## 12. A bug worth recording
 
 `engine/backends.py` listed `hotwords` in `OpenAIWhisperBackend.DROP` with
 nothing mapping it to `initial_prompt`, which is the reference

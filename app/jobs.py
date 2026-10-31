@@ -38,6 +38,9 @@ class Job:
     hotwords: str | None
     insert_mode: str
     rtl_auto: bool
+    # Dictation only. Transcribing a file is unchanged: the recording of a
+    # meeting is evidence, and a language model tidying it is not wanted.
+    refine: bool = False
     state: str = "queued"
     progress: Progress = field(default_factory=Progress)
     meta: dict | None = None
@@ -91,12 +94,12 @@ class JobManager:
 
     # -------------------------------------------------------------- submitting
     def submit(self, path: str, *, language=None, timestamps=False, hotwords=None,
-               insert_mode="cursor", rtl_auto=True) -> Job:
+               insert_mode="cursor", rtl_auto=True, refine=False) -> Job:
         """Always accepted. Never blocked by a job that is running or unwinding
         after a cancel - that was the whole complaint."""
         job = Job(id=next(self._ids), path=str(path), language=language,
                   timestamps=timestamps, hotwords=hotwords,
-                  insert_mode=insert_mode, rtl_auto=rtl_auto)
+                  insert_mode=insert_mode, rtl_auto=rtl_auto, refine=refine)
         with self._lock:
             self.jobs.append(job)
             # Trim finished jobs only; never drop something still running.
@@ -220,6 +223,7 @@ class JobManager:
                     timestamps=job.timestamps,
                     hotwords=job.hotwords,
                     resume=True,
+                    refine=job.refine,
                     on_progress=on_progress,
                     cancel=job.cancel,
                 )

@@ -304,6 +304,7 @@ S: dict[str, tuple[str, str]] = {
     "state_decoding": ("Reading the audio file", "جارٍ قراءة الملف الصوتي"),
     "state_detecting": ("Detecting the language", "جارٍ كشف اللغة"),
     "state_transcribing": ("Transcribing", "جارٍ التفريغ"),
+    "state_refining": ("Correcting the text", "جارٍ تصحيح النص"),
     "state_writing": ("Writing the text", "جارٍ كتابة النص"),
     "state_done": ("Finished", "انتهى"),
     "state_error": ("Something went wrong", "حدث خطأ"),
@@ -401,6 +402,20 @@ S: dict[str, tuple[str, str]] = {
     # ------------------------------------------------------- dictation check
     "group_dictation": ("Dictation", "الإملاء"),
     "field_mic": ("Microphone:", "الميكروفون:"),
+    "check_refine": ("Correct dictated text with a local language model",
+                     "تصحيح النص المُملى بنموذج لغوي محلي"),
+    "help_refine": ("Fixes spelling, punctuation and grammar, and removes "
+                    "hesitation words. Needs Ollama and a model installed; "
+                    "does nothing without one. Never changes your dialect, "
+                    "and never touches a file you transcribe.",
+                    "يصلّح الإملاء والترقيم والنحو ويحذف كلمات التردد. يحتاج "
+                    "Ollama ونموذجًا مثبّتًا، ولا يفعل شيئًا بدونهما. لا يغيّر "
+                    "لهجتك أبدًا، ولا يمسّ أي ملف تفرّغه."),
+    "chk_refine": ("Text correction model", "نموذج تصحيح النص"),
+    "chk_refine_none": ("Not installed, so dictated text is written exactly "
+                        "as it was heard.",
+                        "غير مثبّت، فالنص المُملى يُكتب كما سُمع تمامًا."),
+    "chk_refine_ok": ("Ready, model {model}", "جاهز، النموذج {model}"),
     "field_corrections": ("Always correct:", "تصحيحات دائمة:"),
     "help_corrections": ("One per line, wrong = right. Applied to dictation "
                          "exactly as written, whole words only.",

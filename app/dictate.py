@@ -223,6 +223,10 @@ class DictationController:
             hotwords=s.hotwords or None,
             insert_mode=s.insert_mode,
             rtl_auto=s.rtl_auto,
+            # Dictation is the only thing that gets tidied by a language
+            # model. A recording of a meeting is evidence; it is transcribed
+            # and not improved.
+            refine=s.refine_text,
         )
         # The window the user already knows from transcribing a file: name,
         # length, language, progress, time left, speed, model. It does not
