@@ -34,22 +34,49 @@ TIMEOUT_S = 120
 # again, short enough that the memory comes back if the user stops.
 KEEP_ALIVE = "30m"
 
-# Preference order, best first. Picked from what is actually installed; the
-# list exists so that pulling a better model is the whole of the upgrade.
+# Preference order, best first, picked from what is actually installed - so
+# pulling a better model is the whole of the upgrade.
 #
-# 8B is the quality choice and wants a GPU. On a CPU-only machine - which is
-# what this was developed on - 4B is the one that answers in seconds rather
-# than tens of seconds, and it is where the ordering puts the small models
-# ahead of nothing at all.
-PREFERRED = (
-    "qwen3:8b",
-    "falcon3:7b",
+# Two orders, because the right model depends on what it will run on. The
+# machine decides, not the user: somebody who pulls an 8B model onto a laptop
+# with no graphics card should not have to work out for themselves why
+# dictation suddenly takes half a minute.
+PREFERRED_GPU = (
+    "qwen3:8b",         # best Arabic of the practical sizes, ~5.2 GB
+    "falcon3:7b",       # Arabic-native alternative
     "qwen3:4b",
     "qwen2.5:7b",
-    "qwen2.5:3b",
-    "gemma2:9b",
     "llama3.1:8b",
+    "gemma2:9b",
+    "qwen3:1.7b",
+    "qwen2.5:3b",
 )
+# On a CPU an 8B model answers in tens of seconds, which is longer than the
+# transcription it is correcting. Small first here, and that is the right way
+# round: this step fixes commas and hesitation words, and a 4B model does
+# that as well as an 8B one.
+PREFERRED_CPU = (
+    "qwen3:4b",         # ~2.5 GB, the balance for a machine with no GPU
+    "qwen2.5:3b",
+    "qwen3:1.7b",       # ~1.4 GB, for a slow machine
+    "gemma2:2b",
+    "llama3.2:3b",
+    "falcon3:3b",
+    "qwen3:8b",         # last, rather than never: better slow than nothing
+    "falcon3:7b",
+)
+
+
+def preferred(has_gpu: bool | None = None) -> tuple[str, ...]:
+    """The order to pick in, for this machine."""
+    if has_gpu is None:
+        try:
+            from engine.device import pick_device
+
+            has_gpu = pick_device("auto").device == "cuda"
+        except Exception:
+            has_gpu = False
+    return PREFERRED_GPU if has_gpu else PREFERRED_CPU
 
 # A correction stays about the same size. Far outside this band the model has
 # started writing instead of correcting.
@@ -146,12 +173,14 @@ class OllamaRefiner:
     """A model running locally, reached over the loopback interface."""
 
     def __init__(self, model: str = "", host: str = HOST,
-                 timeout: float = TIMEOUT_S, transport=None):
+                 timeout: float = TIMEOUT_S, transport=None,
+                 has_gpu: bool | None = None):
         self.host = host.rstrip("/")
         self.timeout = timeout
         # Injected in tests. Nothing here should need a server running to be
         # exercised, and the guard above is the part that matters most.
         self._transport = transport
+        self.has_gpu = has_gpu
         self.model = model or ""
 
     # -- talking to it -----------------------------------------------------
@@ -191,10 +220,23 @@ class OllamaRefiner:
         names = self.installed()
         if not names:
             return ""
-        for wanted in PREFERRED:
+        order = preferred(self.has_gpu)
+
+        # Exact sizes first, over the whole list. Matching by family would let
+        # "qwen3:4b" be satisfied by "qwen3:8b", which on a machine with no
+        # graphics card is the one choice this ordering exists to avoid.
+        for wanted in order:
             for name in names:
-                if name == wanted or name.startswith(wanted.split(":")[0] + ":"):
+                if name == wanted or name == wanted + "-instruct":
                     return name
+        # Then a tag of a family we know, whatever its size: somebody with
+        # qwen3:14b installed wants that rather than nothing.
+        families = {wanted.split(":")[0] for wanted in order}
+        for name in names:
+            if name.split(":")[0] in families:
+                return name
+        # And finally whatever is there. Somebody who pulled a model on
+        # purpose meant to use it.
         return names[0]
 
     @property

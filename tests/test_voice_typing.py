@@ -248,6 +248,34 @@ sent = transport(GOOD)
 refiner = refine.OllamaRefiner(transport=sent)
 check("it picks the best installed model, not the first",
       refiner.choose() == "qwen3:4b", refiner.choose())
+
+# Which model is best depends on what it runs on, and the machine decides -
+# somebody who pulls an 8B onto a laptop with no graphics card should not have
+# to work out for themselves why dictation started taking half a minute.
+def installed(*names):
+    return transport(GOOD, models=names)
+
+
+for label, names, cpu_pick, gpu_pick in [
+    ("both sizes pulled", ("qwen3:8b", "qwen3:4b"), "qwen3:4b", "qwen3:8b"),
+    ("only the big one", ("qwen3:8b",), "qwen3:8b", "qwen3:8b"),
+    ("a size not on the list", ("qwen3:14b",), "qwen3:14b", "qwen3:14b"),
+    ("a model we never named", ("mistral:7b",), "mistral:7b", "mistral:7b"),
+]:
+    for gpu, expected in ((False, cpu_pick), (True, gpu_pick)):
+        got = refine.OllamaRefiner(transport=installed(*names),
+                                   has_gpu=gpu).choose()
+        check(f"{label}, {'with' if gpu else 'without'} a GPU: {expected}",
+              got == expected, got)
+
+check("with nothing pulled there is no model to use",
+      refine.OllamaRefiner(transport=installed(), has_gpu=False).choose() == "")
+check("a small model comes first on a CPU",
+      refine.preferred(has_gpu=False)[0] == "qwen3:4b",
+      refine.preferred(has_gpu=False)[0])
+check("and the quality one first on a GPU",
+      refine.preferred(has_gpu=True)[0] == "qwen3:8b",
+      refine.preferred(has_gpu=True)[0])
 result = refiner.refine(RAW)
 check("a correction is accepted", result.text == GOOD and result.changed,
       result.reason or result.text[:40])

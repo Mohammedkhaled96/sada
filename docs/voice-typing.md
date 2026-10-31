@@ -259,24 +259,47 @@ language model are fetched by different tools, sized in different units and
 deleted for different reasons; somebody clearing one must not take the other
 with it. Point Ollama at it with `OLLAMA_MODELS`.
 
-### Which model
+### Which model, and how to install it
 
-Picked automatically from what is installed, best first, so pulling a better
-one is the whole of the upgrade.
+```
+ollama pull qwen3:4b          # no graphics card - most laptops
+ollama pull qwen3:8b          # with an NVIDIA card
+```
 
-| Model | |
-|---|---|
-| `qwen3:8b` | Best Arabic of the practical sizes. Wants a GPU. ~5-6 GB |
-| `falcon3:7b` | Arabic-native alternative. ~5 GB |
-| **`qwen3:4b`** | **The one for a CPU-only machine.** Answers in seconds |
-| `qwen2.5`, `gemma2`, `llama3.1` | Fallbacks if one of those is already there |
+| Model | Download | For |
+|---|---|---|
+| `qwen3:8b` | ~5.2 GB | Best Arabic of the practical sizes. Wants a GPU |
+| `falcon3:7b` | ~5 GB | Arabic-native alternative |
+| **`qwen3:4b`** | **~2.5 GB** | **A machine with no graphics card** |
+| `qwen3:1.7b` | ~1.4 GB | A slow machine, or a small disk |
+
+**Note the tag.** `ollama pull qwen3` with no tag fetches the 8B.
+
+**The machine decides, not the user.** `engine/refine.preferred()` asks
+`engine.device` whether there is a CUDA card and picks in a different order
+either way: quality first with a GPU, size first without. Somebody who pulls
+an 8B model onto a laptop with no graphics card should not have to work out
+for themselves why dictation started taking half a minute - with both
+installed, a CPU machine uses the 4B.
+
+Matching is by exact tag over the whole list before any family fallback.
+Matching `qwen3:4b` by family would accept `qwen3:8b`, which is the one thing
+this ordering exists to avoid.
+
+A model installed but not on the list is used anyway when it is the only one:
+somebody who pulled a model on purpose meant to use it.
 
 Jais 30B has the best Arabic of all and needs about 20 GB of VRAM. It is not
 on the list because a dictation tool that needs a workstation is not a
 dictation tool.
 
-A model that is installed but not on the list is used anyway when it is the
-only one: somebody who pulled a model on purpose meant to use it.
+### Ollama Cloud is not an option
+
+Its hosted API at `ollama.com/api` and `ollama.com/v1` requires an API key as
+a Bearer token, and cloud models through a local install require
+`ollama signin`. There is no anonymous tier, and as of late 2026 the free
+plan was replaced by metered pay-as-you-go. Using it would also send dictated
+text off the machine, which is the thing this feature is built not to do.
 
 ### What it is told
 
