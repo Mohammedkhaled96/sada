@@ -295,7 +295,7 @@ check("reports a model that is not here", missing.installed is False,
       f"{missing.checkpoint} {missing.size_text}")
 check("and does not call it a partial download", missing.partial is False)
 
-check("lists every offered model", len(models.all_info()) >= 4,
+check("lists every offered model", len(models.all_info()) == 4,
       ", ".join(m.checkpoint for m in models.all_info()))
 
 # Somebody opening Settings for the first time is looking at four checkpoints

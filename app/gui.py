@@ -100,20 +100,6 @@ def _hint(sizer, parent, text: str) -> None:
     sizer.Add(label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD)
 
 
-def _listed_models() -> list:
-    """The models offered for download.
-
-    The language-detection helper is included even though it is not a choice
-    for transcription: dictation needs it, and a model the program uses but
-    offers no way to install is a feature that silently runs slowly.
-    """
-    listed = models.all_info()
-    helper = models.info(models.LANGUAGE_DETECT)
-    if all(m.key != helper.key for m in listed):
-        listed.append(helper)
-    return listed
-
-
 def _microphones() -> list:
     """The recording devices, or nothing if the audio library is missing.
 
@@ -446,18 +432,15 @@ class SettingsDialog(wx.Dialog):
 
         self.model_list.DeleteAllItems()
         self._model_rows = []
-        for m in _listed_models():
+        for m in models.all_info():
             state = (t("model_installed") if m.installed
                      else t("model_partial") if m.partial
                      else t("model_not_installed"))
             # The recommendation belongs on the name, not in a column of its
             # own: this list is where a model is chosen for download, and a
             # separate column would be one more thing to arrow across to find.
-            name = m.checkpoint
-            if m.recommended:
-                name += t("model_recommended_hint")
-            elif m.key == models.LANGUAGE_DETECT:
-                name += t("model_helper_hint")
+            name = m.checkpoint + (t("model_recommended_hint")
+                                   if m.recommended else "")
             row = self.model_list.InsertItem(self.model_list.GetItemCount(),
                                              name)
             self.model_list.SetItem(row, 1, m.size_text)

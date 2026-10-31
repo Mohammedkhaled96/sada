@@ -398,8 +398,6 @@ class Dictation:
             # has to be split before it is handed over, not after.
             runs = langmap.split(segment, self.lid_backend if self.cheap_detection
                                  else None, fallback=self._last_language())
-            if not self.cheap_detection and runs[0].language is None:
-                runs[0].language = self._detect(segment)
 
         texts = []
         for run in runs:
@@ -467,6 +465,13 @@ class Dictation:
                     self._dropped += 1
                     continue
                 pieces.append(text)
+                if language is None and row.get("language"):
+                    # Given no language, the model detected one as part of
+                    # this call and the rest of the dictation can reuse it.
+                    # This is why nothing asks beforehand: a separate
+                    # detection pass is an extra encode of the same audio.
+                    with self._lock:
+                        self._languages.append(row["language"])
 
         joined = " ".join(pieces).strip()
         if not joined:
@@ -498,22 +503,27 @@ class Dictation:
     def _detect(self, segment: np.ndarray) -> str | None:
         """Which language this segment is in, decided as cheaply as possible.
 
-        Per segment, not per session: forcing one language on a whole dictation
-        is what previously wrote English sentences in Arabic letters. That is
-        only affordable on a small model - measured, `tiny` answers this in
-        0.65 s where the large model takes about nine, which is the difference
-        between keeping up with speech and falling behind it.
+        Forcing one language on a whole dictation is what once wrote English
+        sentences in Arabic letters, so this was per segment while there was a
+        model cheap enough to ask that often.
 
-        Without the small model, detection happens once and is then reused.
-        Mixing languages mid-dictation stops working, and that is the right
-        way round: a user who has not installed it gets a slower, simpler
-        feature rather than one that falls further behind the longer they talk.
+        There is no small model any more, so detection happens once per
+        dictation and is then reused. Mixing languages mid-sentence does not
+        work on this engine as a result - that is what the Google engine is
+        for, which hears the whole segment and decides for itself.
         """
         last = self._last_language()
         if not self.cheap_detection and last:
             return last
         try:
-            language, confidence, _ = self.lid_backend.detect_language(audio=segment)
+            # In a short window, so the detection pass costs about two and a
+            # half seconds rather than nine. It happens once per dictation on
+            # this path, not once per segment, which is the whole reason it is
+            # affordable at all now that there is no small model to ask.
+            with short_window(getattr(self.lid_backend, "model", None),
+                              len(segment) / SAMPLE_RATE):
+                language, confidence, _ = self.lid_backend.detect_language(
+                    audio=segment)
         except Exception:
             return last
         if confidence < LANGUAGE_CONFIDENCE_MIN:

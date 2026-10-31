@@ -56,9 +56,10 @@ We do not improve it.**
 | Rambler feature | Us | How |
 |---|---|---|
 | Automatic punctuation and capitalisation | **Yes** | Whisper emits both natively |
-| Mixing languages in one sentence | **Yes** | `engine/langmap.py` — the segment is split at the language boundary *before* it is transcribed |
+| Mixing languages in one sentence | **On the Google engine** | It hears the whole segment and decides for itself. `engine/langmap.py` did this locally until the model it needed was removed — see §12 |
 | Names and jargon spelled right | **Yes** | `hotwords` as `initial_prompt`, plus the end of what has already been written |
 | A personal dictionary | **Yes, better** | A list of replacements the user writes, applied literally — nothing is inferred |
+| Emoji asked for out loud | **Yes, on every engine** | `engine/emoji.py` — a table, no model, so it works offline |
 | Filler removal ("أمم", "um") | **Carefully** | Exact words on a short list, never repetition regexes — §5 |
 | Stutters and repeated phrases | **Yes** | `engine/cleanup.py`, and only where the decoder, not the speaker, repeated itself |
 | Single undo of the whole insertion | **Yes, already** | `wordio.insert_transcript` |
@@ -397,7 +398,24 @@ This is the only thing in the program that leaves the machine. It is off in a
 fresh install, the setting says so in both languages, and the key is encrypted
 with DPAPI for the Windows account rather than left in `settings.json` as text.
 
-## 12. What we are not doing, and why
+## 12. The language-identification model, and its removal
+
+`tiny` was asked one question — "which language is this phrase" — and never
+asked for a word of text. It answered as well as the large model and about
+thirty times cheaper, which is what made the language a per-phrase decision
+and let `engine/langmap.py` split a sentence that changed language.
+
+It was removed at the user's request. The cost is stated rather than hidden:
+**the local engine now writes a whole dictation in one language**, detected
+once, in a short window, by the model already loaded. Mixing languages
+mid-sentence is now what the Google engine is for — which does the job better
+anyway, since one model hearing the whole segment needs no splitting at all.
+
+`engine/langmap.py` is kept whole. It takes the model it needs as an argument
+and returns a single run when given None, so a local identification model that
+arrives later is a one-line change rather than a rewrite.
+
+## 13. What we are not doing, and why
 
 - **No cloud engine.** Offline is the product. Gemini was tried: no keyless
   access, rate limits on the key rather than the model, and 16 s of Arabic
@@ -406,7 +424,7 @@ with DPAPI for the Windows account rather than left in `settings.json` as text.
 - **No progressive insertion into Word.** `docs/accessibility.md`.
 - **No second text model** unless stage 0 fails, in which case `small`.
 
-## 13. The larger prize, out of scope here
+## 14. The larger prize, out of scope here
 
 CTranslate2 int8 is measured in `docs/accuracy-notes.md` at 3-5x realtime
 against the 0.65x we get today, and it would speed up **file transcription**,

@@ -23,7 +23,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from engine import cleanup, fillers
+from engine import cleanup, emoji, fillers
 from engine.dictation import (MAX_SEGMENT_S, MIN_SEGMENT_S, PAUSE_S, Dictation,
                               Segmenter, transcribe_stream)
 
@@ -219,15 +219,11 @@ else:
     backend = load_backend("openai", "turbo", pick_device("cpu"))
     warm_up(backend.model)
 
-    # tiny decides the language, as the app does. Asking turbo instead costs a
-    # second full encoder pass per segment - about nine seconds each here,
-    # which on its own is the difference between keeping up with speech and
-    # falling behind it.
-    lid = (load_backend("openai", "tiny", pick_device("cpu"))
-           if info("tiny").installed else None)
-
+    # No separate language-identification model: it was removed from the
+    # program, so the large model answers that question once per dictation,
+    # in a short window.
     states: list[str] = []
-    dictation = Dictation(backend, lid_backend=lid,
+    dictation = Dictation(backend,
                           on_state=lambda name, **kw: states.append(name))
 
     started = time.time()
@@ -261,7 +257,6 @@ else:
     import speechgen
 
     from engine import langmap
-    from engine.models import LANGUAGE_DETECT
 
     english = speechgen.pick("david", "zira", "english")
     arabic = speechgen.pick("arabic", "leila")
@@ -269,8 +264,12 @@ else:
         print(f"  (needs an English and an Arabic voice; this machine has "
               f"{len(speechgen.voices())} - skipped)")
     else:
-        lid = (load_backend("openai", LANGUAGE_DETECT, pick_device("cpu"))
-               if info(LANGUAGE_DETECT).installed else None)
+        # No language-identification model any more: it was removed from the
+        # program, so the local engine writes a whole dictation in one
+        # language. The splitting below is still exercised, with the large
+        # model answering, because the Google engine is the supported way to
+        # mix languages and a local one may come back.
+        lid = backend
         mixed = speechgen.conversation([
             ("السلام عليكم، التقرير جاهز.", arabic),
             ("The quarterly report is ready for review.", english),

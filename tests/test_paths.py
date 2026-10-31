@@ -123,13 +123,13 @@ with tempfile.TemporaryDirectory() as td:
     (stale / "models").mkdir(parents=True)
     (stale / "settings.json").write_text('{"model": "turbo"}', encoding="utf-8")
     (stale / "models" / "medium.pt").write_bytes(b"m" * 2048)
-    (stale / "models" / "tiny.pt").write_bytes(b"the old copy")
+    (stale / "models" / "small.pt").write_bytes(b"the old copy")
     (stale / "out").mkdir()
     (stale / "endpoint.json").write_text("{}", encoding="utf-8")
 
     project = Path(td) / "project"
     (project / "models").mkdir(parents=True)
-    (project / "models" / "tiny.pt").write_bytes(b"the good copy")
+    (project / "models" / "small.pt").write_bytes(b"the good copy")
 
     p = fresh_paths(Path(td) / "profile", project, project / "models")
     check("a stale folder with our settings.json is a duplicate",
@@ -148,7 +148,7 @@ with tempfile.TemporaryDirectory() as td:
           [x.name for x in report["adopted"]] == ["medium.pt"],
           str(report["adopted"]))
     check("a checkpoint we already have is not overwritten by the old one",
-          (project / "models" / "tiny.pt").read_bytes() == b"the good copy")
+          (project / "models" / "small.pt").read_bytes() == b"the good copy")
 
 
 # ----------------------------------------------------- it runs at startup

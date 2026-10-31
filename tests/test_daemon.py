@@ -1,6 +1,6 @@
 """Start the daemon for real and exercise every endpoint over HTTP.
 
-Uses the tiny model so the run is quick; the point is the service contract, not
+Uses whichever model is installed - the point is the service contract, not
 transcription quality.
 
 Run:  PYTHONUTF8=1 .venv/Scripts/python.exe tests/test_daemon.py
@@ -27,6 +27,19 @@ AUDIO = Path("E:/test.mp3")
 # on checking the old place and reported a daemon that was working
 # perfectly as broken.
 from engine.paths import STATE_DIR as STATE  # noqa: E402
+
+
+def _installed_model() -> str:
+    """Whichever checkpoint is on this machine.
+
+    The smallest model used to be hardcoded here because it made the run
+    quick. It was removed from the program, and a test that names a model
+    nobody has would spend the run downloading one.
+    """
+    from engine.models import installed_keys
+
+    found = installed_keys()
+    return found[0] if found else "turbo"
 
 ENDPOINT = STATE / "endpoint.json"
 
@@ -64,7 +77,7 @@ def main() -> int:
     ENDPOINT.unlink(missing_ok=True)
     print("starting the daemon...", flush=True)
     proc = subprocess.Popen(
-        [str(PY), "-m", "engine.daemon", "--model", "tiny",
+        [str(PY), "-m", "engine.daemon", "--model", _installed_model(),
          "--backend", "openai-whisper"],
         cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace",

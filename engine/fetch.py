@@ -22,7 +22,7 @@ from engine.backends import MODEL_NAMES
 
 def show_list() -> int:
     print(f"{'model':<18} {'size':>9}  state")
-    for m in models.all_info() + [models.info(models.LANGUAGE_DETECT)]:
+    for m in models.all_info():
         state = ("installed" if m.installed
                  else "incomplete download" if m.partial else "not installed")
         print(f"{m.checkpoint:<18} {m.size_text:>9}  {state}")
@@ -33,7 +33,7 @@ def show_list() -> int:
 def main() -> int:
     p = argparse.ArgumentParser(prog="fetch", description=__doc__)
     p.add_argument("model", nargs="?", default=None,
-                   help=" | ".join(k for k in MODEL_NAMES if k != "tiny"))
+                   help=" | ".join(MODEL_NAMES))
     p.add_argument("--list", action="store_true", help="show what is installed")
     args = p.parse_args()
 
@@ -42,7 +42,7 @@ def main() -> int:
 
     if args.model not in MODEL_NAMES:
         print(f"unknown model {args.model!r}; one of "
-              f"{', '.join(k for k in MODEL_NAMES if k != 'tiny')}")
+              f"{', '.join(MODEL_NAMES)}")
         return 2
 
     info = models.info(args.model)

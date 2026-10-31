@@ -25,7 +25,6 @@ from engine.paths import MODELS_DIR
 # Content-Length as served by OpenAI's CDN, so a size can be shown before any
 # network call and a truncated file can be spotted without hashing 3 GB.
 SIZES = {
-    "tiny": 75_572_083,
     "small": 483_617_219,
     "medium": 1_528_008_539,
     "large-v3": 3_087_371_615,
@@ -38,11 +37,6 @@ SIZES = {
 # files and the model chooser can never recommend two different things.
 RECOMMENDED = "turbo"
 
-# Not a choice for transcription - at 39M parameters it writes
-# "بسم الله رحمة رحمة" for "بسم الله الرحمن الرحيم". It is here because it
-# answers "which language is this?" as well as the large model does and about
-# thirty times faster, which is what makes dictation keep up with speech.
-LANGUAGE_DETECT = "tiny"
 
 
 def human(size: int) -> str:
@@ -87,7 +81,7 @@ def info(model_key: str) -> ModelInfo:
 
 
 def all_info() -> list[ModelInfo]:
-    return [info(k) for k in MODEL_NAMES if k != "tiny"]
+    return [info(k) for k in MODEL_NAMES]
 
 
 def installed_keys() -> list[str]:

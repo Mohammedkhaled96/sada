@@ -194,8 +194,6 @@ S: dict[str, tuple[str, str]] = {
     # Appended to the model's name in the list, so a screen reader reads it as
     # part of the row and does not have to be told which column to look in.
     "model_recommended_hint": (" (recommended)", " (موصى به)"),
-    "model_helper_hint": (" (for dictation: detects the language)",
-                          " (للإملاء: يحدّد اللغة)"),
     "col_model": ("Model", "النموذج"),
     "col_size": ("Size", "الحجم"),
     "col_state": ("State", "الحالة"),
@@ -627,9 +625,13 @@ cursor. The work happens while you are still speaking, so the wait after you
 press stop is only for the last phrase - about a second or two.
 A tone marks each change as well as the spoken word, because a tone arrives
 immediately and speech waits for the screen reader to be free.
-You can change language in the middle of a sentence. The program finds where
-one language stops and the next begins and writes each part in its own script,
-so Arabic stays in Arabic letters and English in Latin ones.
+Say the name of an emoji followed by the word emoji - "smile face emoji",
+"thumbs up emoji", "ايموجي قلب" - and the emoji is written instead of the
+words. The word emoji has to be there, so a sentence about your heart keeps
+the word heart.
+To change language in the middle of a sentence, use the Google engine below.
+It hears the whole recording and writes each part in its own script. The
+engine on this computer writes a whole dictation in one language.
 On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
@@ -642,7 +644,8 @@ learnt mostly written Arabic, so a dictated Egyptian sentence comes back part
 wrong - and once a word has been misheard, nothing can put it back. A model
 that hears the recording itself can. It also applies corrections you say out
 loud: "at six thirty, no, make it eight" is written as eight. And it writes an
-emoji where you ask for one.
+emoji where you ask for one - though so does the local engine, so that part
+works with no key and no connection.
 On this computer, then Google repairs the text keeps the audio here and sends
 only the words, which is less private than the first and more private than the
 second.
@@ -721,8 +724,12 @@ carries on from where it stopped.
 وأنت ما زلت تتكلم، فالانتظار بعد الإيقاف يكون على آخر جملة فقط.
 مع كل تغيّر في الحالة نغمة قصيرة إلى جانب الكلام المنطوق، لأن النغمة تصل
 فورًا بينما الكلام ينتظر فراغ قارئ الشاشة.
-تقدر تغيّر اللغة في نص الجملة. البرنامج يلاقي مكان تغيّر اللغة ويكتب كل جزء
-بحروفه، فالعربي يفضل عربي والإنجليزي يفضل لاتيني.
+قول اسم الإيموجي ومعاه كلمة «ايموجي» — «ايموجي قلب»، «ايموجي ابتسامة»،
+«thumbs up emoji» — فيتكتب الإيموجي نفسه بدل الكلام. ولازم كلمة «ايموجي»
+تكون موجودة، فجملة فيها كلمة «قلبي» بتفضل زي ما هي.
+ولو عايز تغيّر اللغة في نص الجملة، استخدم محرّك جوجل اللي تحت. هو بيسمع
+التسجيل كله ويكتب كل جزء بحروفه. أما المحرّك اللي على الجهاز فبيكتب الإملاء
+كله بلغة واحدة.
 ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
 النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
 في الإعدادات «محرّك الإملاء» وفيه ثلاث اختيارات. «على هذا الجهاز» هو
@@ -732,7 +739,7 @@ carries on from where it stopped.
 مكتوب في الأغلب، فالجملة المصرية بترجع ناقصة — ولما الكلمة تتسمع غلط مافيش
 حاجة بترجّعها. النموذج اللي بيسمع التسجيل نفسه يقدر. وهو كمان بيطبّق التصحيحات
 اللي بتقولها بصوتك: «الساعة ستة ونص، لا لا خليها تمانية» تتكتب تمانية. وبيكتب
-الإيموجي اللي بتطلبه.
+الإيموجي اللي بتطلبه — بس ده المحرّك المحلي بيعمله كمان، من غير مفتاح ولا نت.
 و«على هذا الجهاز ثم جوجل يصلّح النص» بيخلّي الصوت عندك ويبعت الكلام بس، يعني
 خصوصية أقل من الأول وأكتر من التاني.
 وأيًا كان اختيارك: لو جوجل ماردّش، النموذج المحلي بيكتبها ويقول لك، والرد اللي

@@ -55,8 +55,6 @@ class DictationController:
         self._stop = threading.Event()
         self._busy = False
         self._abandoned = False
-        self._lid = None
-        self._lid_failed = False
         self.last_result: Result | None = None
 
     def preload(self) -> None:
@@ -282,24 +280,14 @@ class DictationController:
         return None                 # the saved device is gone; use the default
 
     def _language_backend(self):
-        """`tiny` decides the language, when it is installed.
+        """Nothing. There is no separate language-detection model any more.
 
-        Measured, it answers in 0.65 s where the large model takes about nine,
-        and it answers as well. None means it is not here: the pipeline then
-        detects once per dictation with the large model instead of once per
-        segment, which costs mixing languages mid-sentence and keeps the
-        feature fast enough to be worth having.
+        There was one - `tiny`, asked only "which language is this phrase",
+        never asked for a word of text - and it is what let the language be
+        decided per phrase so a sentence could change language halfway. It was
+        removed at the user's instruction. The local engine now detects once
+        per dictation with the model that is already loaded, and a dictation
+        that mixes languages belongs on the Google engine, which hears the
+        whole segment and decides for itself.
         """
-        if self._lid is not None or self._lid_failed:
-            return self._lid
-        try:
-            from engine.backends import load_backend
-            from engine.models import LANGUAGE_DETECT, info
-
-            if not info(LANGUAGE_DETECT).installed:
-                raise FileNotFoundError(f"{LANGUAGE_DETECT} is not installed")
-            self._lid = load_backend("openai", LANGUAGE_DETECT, self.frame.device)
-        except Exception:
-            self._lid_failed = True
-            return None
-        return self._lid
+        return None

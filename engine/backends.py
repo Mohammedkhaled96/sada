@@ -28,12 +28,10 @@ MODEL_NAMES = {
     "large-v3": ("large-v3", "large-v3"),
     "medium": ("medium", "medium"),
     "small": ("small", "small"),
-    "tiny": ("tiny", "tiny"),
 }
 
 # OpenAI publishes each checkpoint under the sha256 of the file itself.
 OPENAI_SHA = {
-    "tiny": "65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9",
     "small": "9ecf779972d90ba49c06d968637d720dd632c55bbf19d441fb42bf17a411e794",
     "medium": "345ae4da62f9b3d59415adc60127b97c714f32e89e936602e85993674d08dcb1",
     "large-v3": "e5b1a55b89c1367dacf97e3e19bfd829a01529dbfdeefa8caeb59b3f1b81dadb",
@@ -193,6 +191,11 @@ class OpenAIWhisperBackend:
                 # backwards on the next one.
                 yield {
                     "id": next_id,
+                    # What the model decided when it was given no language.
+                    # Free here: it detected it as part of this call, sharing
+                    # the mel it had already computed. Asking separately
+                    # beforehand costs a second encoder pass.
+                    "language": result.get("language"),
                     "start": round(min(seg_start, end_s), 3),
                     "end": round(min(seg_end, end_s), 3),
                     "text": s["text"].strip(),

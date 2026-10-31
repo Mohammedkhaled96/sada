@@ -6,14 +6,17 @@ switch - it transliterates, so "the quarterly report" comes back spelled in
 Arabic letters. That is not a bug to tune around; it is what the parameter
 means.
 
-So the segment is split before it is transcribed. Silero already marks the
-pauses between phrases, and `tiny` says what language each phrase is in for
-about 1/30th of what the large model charges for the same answer. Consecutive
-phrases in the same language are joined into one run, each run is transcribed
-separately with its own language, and the results are put back in order.
+So the segment is split before it is transcribed: Silero marks the pauses, a
+language-identification model says what each phrase is in, consecutive phrases
+that agree are joined into runs, and each run is transcribed separately with
+its own language. Boundaries land in the pauses, never inside a phrase, since
+cutting mid-word to change language loses the word in both halves.
 
-Boundaries land in the pauses, never inside a phrase: cutting mid-word to
-change language loses the word in both halves.
+NOTHING CALLS THIS WITH A MODEL ANY MORE. The one that was cheap enough to ask
+per phrase was `tiny`, and it was removed from the program at the user's
+request. `split()` still takes the model it needs, returns a single run when
+given None, and is kept whole because the Google engine does this job properly
+and because a local identification model may come back.
 """
 from __future__ import annotations
 
@@ -23,8 +26,8 @@ import numpy as np
 
 SAMPLE_RATE = 16000
 
-# A phrase shorter than this is not asked about - `tiny` guesses badly on a
-# syllable, and a wrong answer here costs a whole run in the wrong script.
+# A phrase shorter than this is not asked about: a small model guesses badly
+# on a syllable, and a wrong answer here costs a whole run in the wrong script.
 MIN_PHRASE_S = 0.6
 # Below this the answer is treated as "no idea" and the phrase joins its
 # neighbour rather than starting a run of its own.
