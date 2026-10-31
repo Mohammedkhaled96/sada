@@ -22,7 +22,7 @@ from engine.backends import MODEL_NAMES
 
 def show_list() -> int:
     print(f"{'model':<18} {'size':>9}  state")
-    for m in models.all_info():
+    for m in models.all_info() + [models.info(models.LANGUAGE_DETECT)]:
         state = ("installed" if m.installed
                  else "incomplete download" if m.partial else "not installed")
         print(f"{m.checkpoint:<18} {m.size_text:>9}  {state}")

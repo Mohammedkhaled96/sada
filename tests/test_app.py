@@ -328,8 +328,13 @@ print("\n--- main window ---")
 from app.gui import MainWindow
 
 
+class FakeDictation:
+    def toggle(self): pass
+
+
 class FakeApp:
     settings = Settings()
+    dictation = FakeDictation()
 
     def start_transcription(self): pass
     def speak_status(self): pass
@@ -342,10 +347,13 @@ class FakeApp:
 mw = MainWindow(FakeApp())
 check("main window builds", mw is not None, mw.GetTitle())
 check("offers every command",
-      set(mw.buttons) == {"transcribe", "window_status", "cancel", "settings",
-                          "help", "about", "quit"},
+      set(mw.buttons) == {"transcribe", "dictate", "window_status", "cancel",
+                          "settings", "help", "about", "quit"},
       ", ".join(sorted(mw.buttons)))
 check("a blind user can quit without the tray icon", "quit" in mw.buttons)
+# A shortcut another program has taken leaves dictation unreachable otherwise,
+# and the shortcut most likely to be taken is the one Word itself uses.
+check("and can dictate without the shortcut", "dictate" in mw.buttons)
 check("buttons show their shortcut",
       "Ctrl+Shift+T" in mw.buttons["transcribe"].GetLabel(),
       mw.buttons["transcribe"].GetLabel())

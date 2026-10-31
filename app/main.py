@@ -24,6 +24,7 @@ import wx
 import wx.adv
 
 from app import config, i18n, wordio
+from app.dictate import DictationController
 from app.gui import HelpDialog, MainWindow, SettingsDialog
 from app.i18n import duration as dur
 from app.i18n import t
@@ -40,6 +41,7 @@ AUDIO_EXT = "*.mp3;*.m4a;*.wav;*.ogg;*.opus;*.wma;*.flac;*.aac"
 VIDEO_EXT = "*.mp4;*.mkv;*.avi;*.mov;*.webm"
 
 HK_TRANSCRIBE, HK_SETTINGS, HK_STATUS, HK_CANCEL, HK_WINDOW = 1, 2, 3, 4, 5
+HK_DICTATE = 6
 
 _icon_cache = None
 
@@ -174,17 +176,23 @@ class AppFrame(wx.Frame):
                                on_change=self._job_changed,
                                on_finished=self._job_finished)
 
+        self.dictation = DictationController(self)
+
         self.window = MainWindow(self)
         self.window.SetIcon(app_icon())
         self.SetIcon(app_icon())
         self.tray = TrayIcon(self)
         self._registered: list[int] = []
-        self.register_hotkeys()
+        # Kept, because the dictation check reports which shortcut Windows
+        # refused - a dictation key another program owns is otherwise a
+        # feature that silently does nothing.
+        self.hotkey_failures = self.register_hotkeys()
         self.Bind(wx.EVT_HOTKEY, self.on_transcribe, id=HK_TRANSCRIBE)
         self.Bind(wx.EVT_HOTKEY, self.on_settings, id=HK_SETTINGS)
         self.Bind(wx.EVT_HOTKEY, self.on_status, id=HK_STATUS)
         self.Bind(wx.EVT_HOTKEY, self.on_cancel, id=HK_CANCEL)
         self.Bind(wx.EVT_HOTKEY, self.on_window, id=HK_WINDOW)
+        self.Bind(wx.EVT_HOTKEY, self.on_dictate, id=HK_DICTATE)
 
         threading.Thread(target=self._load_model, daemon=True,
                          name="model-loader").start()
@@ -207,6 +215,7 @@ class AppFrame(wx.Frame):
             (HK_STATUS, self.settings.hotkey_status),
             (HK_CANCEL, self.settings.hotkey_cancel),
             (HK_WINDOW, self.settings.hotkey_window),
+            (HK_DICTATE, self.settings.hotkey_dictate),
         ):
             parsed = config.parse_hotkey(text)
             if not parsed:
@@ -246,8 +255,24 @@ class AppFrame(wx.Frame):
             self.say(t("say_load_failed", error=self.backend_error))
         else:
             self.tray.set_state("tray_ready")
+            # Dictation encodes shorter windows than file transcription, and
+            # each window length is a tensor shape the maths library builds
+            # kernels for on first use - several seconds, once. Paid here, in
+            # the background, rather than inside the first thing the user says.
+            threading.Thread(target=self._warm_dictation, daemon=True,
+                             name="dictation-warmup").start()
         if self.window and self.window.IsShown():
             self.window.set_status(self.status_text())
+
+    def _warm_dictation(self) -> None:
+        try:
+            from engine import window as window_sizes
+
+            if getattr(self.backend, "model", None) is not None:
+                window_sizes.warm_up(self.backend.model)
+            self.dictation.preload()
+        except Exception:
+            pass            # a cold first dictation is slower, not broken
 
     # --------------------------------------------------------------- speech
     def say(self, text: str, interrupt: bool = False) -> None:
@@ -278,13 +303,28 @@ class AppFrame(wx.Frame):
             self.speak_status()
 
     def on_cancel(self, _evt) -> None:
+        if self.dictation.active:
+            self.dictation.cancel()
+            return
         if self._hotkey_allowed():
             self.cancel_job()
+
+    def on_dictate(self, _evt) -> None:
+        # Stopping is always allowed. Gating it on Word being in front would
+        # leave a dictation running with no way to end it the moment focus
+        # moved - to a dialog, to the screen reader, to anything.
+        if self.dictation.active or self._hotkey_allowed():
+            self.dictation.toggle()
 
     # ------------------------------------------------------------ the job
     def start_transcription(self) -> None:
         """Always allowed to submit. A running or cancelling job no longer
         blocks a new one - it queues behind it."""
+        if self.dictation.active:
+            # One model, one set of window constants. A file chunk takes half
+            # a minute, which is half a minute of dictation going nowhere.
+            self.say(t("say_transcribe_while_dictating"), interrupt=True)
+            return
         if not self.model_ready.is_set():
             self.say(t("say_loading"), interrupt=True)
             return
@@ -562,7 +602,7 @@ class AppFrame(wx.Frame):
         else:
             self.window.refresh_labels()
 
-        failed = self.register_hotkeys()
+        failed = self.hotkey_failures = self.register_hotkeys()
         if failed:
             msg = t("hotkeys_failed", keys=", ".join(failed))
             self.say(msg, interrupt=True)
@@ -591,6 +631,10 @@ class AppFrame(wx.Frame):
         dlg.Destroy()
 
     def quit_app(self) -> None:
+        # The microphone is an exclusive device on some drivers: leaving it
+        # open would keep it unusable for everything else until the process
+        # actually died.
+        self.dictation.cancel()
         if self.jobs.active():
             if wx.MessageBox(t("quit_while_busy"), t("app_name"),
                              wx.YES_NO | wx.ICON_QUESTION) != wx.YES:

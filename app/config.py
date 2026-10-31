@@ -76,12 +76,20 @@ class Settings:
     rtl_auto: bool = True
     save_side_files: bool = True
 
+    # dictation
+    dictation_remove_fillers: bool = True
+    dictation_device: str = ""              # empty means the system default
+
     # shortcuts
     hotkey_transcribe: str = "Ctrl+Shift+T"
     hotkey_settings: str = "Ctrl+Shift+O"
     hotkey_status: str = "Ctrl+Shift+U"
     hotkey_cancel: str = "Ctrl+Shift+X"
     hotkey_window: str = "Ctrl+Shift+W"
+    # Word's own shortcut for double underline. A global hotkey takes it before
+    # Word sees it, so while Sada runs that formatting shortcut is gone - which
+    # is a deliberate trade, asked for, and changeable like any other here.
+    hotkey_dictate: str = "Ctrl+Shift+D"
 
     # screen reader behaviour
     speak: bool = True
@@ -103,7 +111,7 @@ class Settings:
             self.insert_mode = "cursor"
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
-                  "hotkey_cancel", "hotkey_window"):
+                  "hotkey_cancel", "hotkey_window", "hotkey_dictate"):
             if not parse_hotkey(getattr(self, f)):
                 setattr(self, f, Settings.__dataclass_fields__[f].default)
         return self

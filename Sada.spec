@@ -47,6 +47,11 @@ if icon_file.exists():
 
 binaries = []
 binaries += collect_dynamic_libs("torch")
+# sounddevice carries its own PortAudio build in _sounddevice_data. Without
+# it the import succeeds and every attempt to open the microphone fails, so
+# dictation would be a feature that is present and does nothing.
+binaries += collect_dynamic_libs("sounddevice")
+datas += collect_data_files("sounddevice")
 
 hiddenimports = [
     # torch pulls parts of itself in dynamically
@@ -57,6 +62,8 @@ hiddenimports = [
     "tiktoken_ext.openai_public", "numba", "more_itertools", "regex",
     # Silero VAD runs through onnxruntime
     "onnxruntime", "faster_whisper", "faster_whisper.vad",
+    # the microphone, and the beeps that mark dictation starting and stopping
+    "sounddevice", "_sounddevice", "cffi", "_cffi_backend", "winsound",
     # Word automation and the JAWS scripting API, both late-bound through COM
     "win32com", "win32com.client", "pythoncom", "pywintypes",
     "win32timezone",

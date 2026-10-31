@@ -20,6 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from engine.paths import MODELS_DIR
+from engine.window import BACKEND_LOCK
 
 # name -> (faster-whisper repo id, openai checkpoint name)
 MODEL_NAMES = {
@@ -94,9 +95,13 @@ class OpenAIWhisperBackend:
     supports_resume = True
 
     # openai-whisper names some options differently and does not support others.
+    # `hotwords` is not in this set: it is translated below, not dropped. It
+    # used to be dropped, which meant the "Names and terms" setting did
+    # nothing at all in every shipped release - faster-whisper, which has a
+    # real hotwords parameter, is the backend that cannot be used here.
     DROP = {"vad_filter", "vad_parameters", "repetition_penalty",
             "no_repeat_ngram_size", "max_new_tokens", "chunk_length",
-            "multilingual", "hotwords", "language_detection_threshold",
+            "multilingual", "language_detection_threshold",
             "language_detection_segments", "max_initial_timestamp",
             "prompt_reset_on_temperature", "clip_timestamps"}
     RENAME = {"log_prob_threshold": "logprob_threshold"}
@@ -150,6 +155,13 @@ class OpenAIWhisperBackend:
             clean[self.RENAME.get(k, k)] = v
         clean["verbose"] = None             # keep the built-in bar off our output
 
+        # The reference implementation has no hotwords parameter. Its
+        # equivalent is initial_prompt: text the decoder is conditioned on, so
+        # a name it would otherwise spell by sound is already in front of it.
+        hotwords = clean.pop("hotwords", None)
+        if hotwords and not clean.get("initial_prompt"):
+            clean["initial_prompt"] = str(hotwords)
+
         # We implement clip_timestamps ourselves by dropping earlier chunks.
         clip = opts.get("clip_timestamps")
         skip_before = float(clip[0]) if clip else 0.0
@@ -162,10 +174,15 @@ class OpenAIWhisperBackend:
             if end_s <= skip_before:
                 continue                     # already done by an earlier run
 
-            result = self.model.transcribe(
-                audio[start_sample:end_sample], language=language,
-                task="transcribe", fp16=self._fp16, **clean,
-            )
+            # Dictation encodes a shorter window by patching module-level
+            # constants in the whisper package, which this call reads. Taking
+            # the same lock keeps the two from seeing each other's settings;
+            # it is per chunk, so neither blocks the other for long.
+            with BACKEND_LOCK:
+                result = self.model.transcribe(
+                    audio[start_sample:end_sample], language=language,
+                    task="transcribe", fp16=self._fp16, **clean,
+                )
             for s in result["segments"]:
                 seg_start = start_s + s["start"]
                 seg_end = start_s + s["end"]

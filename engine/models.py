@@ -38,6 +38,12 @@ SIZES = {
 # files and the model chooser can never recommend two different things.
 RECOMMENDED = "turbo"
 
+# Not a choice for transcription - at 39M parameters it writes
+# "بسم الله رحمة رحمة" for "بسم الله الرحمن الرحيم". It is here because it
+# answers "which language is this?" as well as the large model does and about
+# thirty times faster, which is what makes dictation keep up with speech.
+LANGUAGE_DETECT = "tiny"
+
 
 def human(size: int) -> str:
     if size >= 1 << 30:

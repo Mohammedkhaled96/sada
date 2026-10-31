@@ -18,6 +18,7 @@ right-to-left interface is not just translated text.
 """
 from __future__ import annotations
 
+import threading
 import time
 
 import wx
@@ -84,6 +85,46 @@ def _row(sizer, parent, label_text: str, control, help_text: str = "") -> None:
         control.SetToolTip(help_text)
     sizer.Add(lbl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, PAD)
     sizer.Add(control, 1, wx.EXPAND)
+
+
+def _hint(sizer, parent, text: str) -> None:
+    """A line of explanation under a control.
+
+    Static text is not reachable by a screen reader cursor, so this is only
+    ever a repetition of something already set as the control's help text -
+    never the only place a fact appears.
+    """
+    label = wx.StaticText(parent, label=text)
+    label.Wrap(520)
+    sizer.Add(label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD)
+
+
+def _listed_models() -> list:
+    """The models offered for download.
+
+    The language-detection helper is included even though it is not a choice
+    for transcription: dictation needs it, and a model the program uses but
+    offers no way to install is a feature that silently runs slowly.
+    """
+    listed = models.all_info()
+    helper = models.info(models.LANGUAGE_DETECT)
+    if all(m.key != helper.key for m in listed):
+        listed.append(helper)
+    return listed
+
+
+def _microphones() -> list:
+    """The recording devices, or nothing if the audio library is missing.
+
+    Settings must open even on a machine with no sound stack at all, so this
+    never raises - the list is simply empty and the default is used.
+    """
+    try:
+        from engine import mic
+
+        return mic.input_devices()
+    except Exception:
+        return []
 
 
 class SettingsDialog(wx.Dialog):
@@ -160,6 +201,33 @@ class SettingsDialog(wx.Dialog):
             out.Add(c, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD)
         outer.Add(out, 0, wx.EXPAND | wx.ALL, PAD)
 
+        # ------------------------------------------------------- dictation
+        # The check lives here rather than in a menu because this is where
+        # somebody comes when dictation did not work, and because the device
+        # it tests is the one chosen right above it.
+        dic = wx.StaticBoxSizer(wx.VERTICAL, panel, t("group_dictation"))
+        dicbox = dic.GetStaticBox()
+        g4 = wx.FlexGridSizer(0, 2, PAD, PAD)
+        g4.AddGrowableCol(1, 1)
+        self._mic_names = [t("mic_default")] + [str(d) for d in _microphones()]
+        self.mic = wx.Choice(dicbox, choices=self._mic_names)
+        saved = (settings.dictation_device or "").strip()
+        self.mic.SetSelection(self._mic_names.index(saved)
+                              if saved in self._mic_names else 0)
+        _row(g4, dicbox, t("field_mic"), self.mic)
+        dic.Add(g4, 0, wx.EXPAND | wx.ALL, PAD)
+
+        self.remove_fillers = wx.CheckBox(dicbox, label=t("check_remove_fillers"))
+        self.remove_fillers.SetValue(settings.dictation_remove_fillers)
+        dic.Add(self.remove_fillers, 0, wx.LEFT | wx.RIGHT, PAD)
+        _hint(dic, dicbox, t("help_remove_fillers"))
+
+        self.btn_check = wx.Button(dicbox, label=t("btn_dictation_check"))
+        self.btn_check.Bind(wx.EVT_BUTTON, self.on_dictation_check)
+        dic.Add(self.btn_check, 0, wx.ALL, PAD)
+        _hint(dic, dicbox, t("help_dictation_check"))
+        outer.Add(dic, 0, wx.EXPAND | wx.ALL, PAD)
+
         # -------------------------------------------------------- shortcuts
         keys = wx.StaticBoxSizer(wx.VERTICAL, panel, t("group_shortcuts"))
         g3 = wx.FlexGridSizer(0, 2, PAD, PAD)
@@ -170,12 +238,14 @@ class SettingsDialog(wx.Dialog):
         self.k_settings = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_settings))
         self.k_status = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_status))
         self.k_cancel = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_cancel))
+        self.k_dictate = wx.TextCtrl(box, value=format_hotkey(settings.hotkey_dictate))
         _row(g3, box, t("field_k_transcribe"), self.k_transcribe,
              t("help_k_transcribe"))
         _row(g3, box, t("field_k_window"), self.k_window)
         _row(g3, box, t("field_k_settings"), self.k_settings)
         _row(g3, box, t("field_k_status"), self.k_status, t("help_k_status"))
         _row(g3, box, t("field_k_cancel"), self.k_cancel)
+        _row(g3, box, t("field_k_dictate"), self.k_dictate, t("help_k_dictate"))
         keys.Add(g3, 0, wx.EXPAND | wx.ALL, PAD)
         outer.Add(keys, 0, wx.EXPAND | wx.ALL, PAD)
 
@@ -283,6 +353,7 @@ class SettingsDialog(wx.Dialog):
             "hotkey_settings": self.k_settings,
             "hotkey_status": self.k_status,
             "hotkey_cancel": self.k_cancel,
+            "hotkey_dictate": self.k_dictate,
         }
         seen: dict[tuple[int, int], str] = {}
         for name, ctrl in keys.items():
@@ -308,6 +379,9 @@ class SettingsDialog(wx.Dialog):
         s.timestamps = self.timestamps.GetValue()
         s.rtl_auto = self.rtl_auto.GetValue()
         s.save_side_files = self.side_files.GetValue()
+        s.dictation_remove_fillers = self.remove_fillers.GetValue()
+        s.dictation_device = ("" if self.mic.GetSelection() <= 0
+                              else self._mic_names[self.mic.GetSelection()])
         for name, ctrl in keys.items():
             setattr(s, name, format_hotkey(ctrl.GetValue()))
         s.speak = self.speak.GetValue()
@@ -318,6 +392,28 @@ class SettingsDialog(wx.Dialog):
         config.save(s)              # also switches the active language
         self.EndModal(wx.ID_OK)
 
+
+    # ------------------------------------------------------ dictation check
+    def on_dictation_check(self, _evt) -> None:
+        """Run the check against whichever microphone is chosen right now.
+
+        Deliberately not against the saved setting: somebody who has just
+        picked a different device wants to know about that one, and making
+        them save and reopen first would be the opposite of a diagnostic.
+        """
+        index = None
+        choice = self.mic.GetSelection()
+        if choice > 0:
+            wanted = self._mic_names[choice]
+            for device in _microphones():
+                if str(device) == wanted:
+                    index = device.index
+                    break
+        dlg = DictationCheckDialog(self, self.GetParent(), index,
+                                   on_announce=self.on_announce)
+        dlg.ShowModal()
+        dlg.Destroy()
+
     # ----------------------------------------------------------- model files
     def refresh_models(self) -> None:
         # Note which model is selected before the rows are thrown away.
@@ -326,15 +422,18 @@ class SettingsDialog(wx.Dialog):
 
         self.model_list.DeleteAllItems()
         self._model_rows = []
-        for m in models.all_info():
+        for m in _listed_models():
             state = (t("model_installed") if m.installed
                      else t("model_partial") if m.partial
                      else t("model_not_installed"))
             # The recommendation belongs on the name, not in a column of its
             # own: this list is where a model is chosen for download, and a
             # separate column would be one more thing to arrow across to find.
-            name = m.checkpoint + (t("model_recommended_hint")
-                                   if m.recommended else "")
+            name = m.checkpoint
+            if m.recommended:
+                name += t("model_recommended_hint")
+            elif m.key == models.LANGUAGE_DETECT:
+                name += t("model_helper_hint")
             row = self.model_list.InsertItem(self.model_list.GetItemCount(),
                                              name)
             self.model_list.SetItem(row, 1, m.size_text)
@@ -608,6 +707,104 @@ class HelpDialog(wx.Dialog):
         txt.SetFocus()
 
 
+class DictationCheckDialog(wx.Dialog):
+    """Runs the dictation check and reads the results out as they arrive.
+
+    The results go into a read-only multiline field rather than a list or a
+    label: a screen reader cursor can be moved through it line by line, which
+    matters because several of these results end in a sentence telling the
+    user which setting to change.
+    """
+
+    def __init__(self, parent, frame, device_index=None, on_announce=None):
+        super().__init__(parent, title=t("dictation_check_title"),
+                         style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        apply_direction(self)
+        self.frame = frame
+        self.device_index = device_index
+        self.on_announce = on_announce or (lambda text: None)
+        self._thread = None
+
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(wx.StaticText(panel, label=t("dictation_check_intro")),
+                  0, wx.ALL, PAD)
+
+        self.out = wx.TextCtrl(
+            panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_RICH2)
+        _set_accessible_name(self.out, t("dictation_check_results"))
+        sizer.Add(self.out, 1, wx.EXPAND | wx.ALL, PAD)
+
+        btns = wx.StdDialogButtonSizer()
+        self.start = wx.Button(panel, wx.ID_APPLY, t("btn_start_check"))
+        self.start.Bind(wx.EVT_BUTTON, self.on_start)
+        close = wx.Button(panel, wx.ID_OK, t("btn_close"))
+        btns.AddButton(self.start)
+        btns.AddButton(close)
+        btns.Realize()
+        sizer.Add(btns, 0, wx.EXPAND | wx.ALL, PAD)
+
+        panel.SetSizer(sizer)
+        self.SetSize((640, 520))
+        self.CentreOnScreen()
+        self.SetEscapeId(wx.ID_OK)
+        self.start.SetFocus()
+
+    # -- running -----------------------------------------------------------
+    def on_start(self, _evt) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self.out.SetValue("")
+        self.start.Enable(False)
+        self._say(t("dictation_check_speak_now"))
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name="dictation-check")
+        self._thread.start()
+
+    def _run(self) -> None:
+        from app import diagnose
+
+        failed = 0
+        try:
+            for step in diagnose.run(self.frame, self.device_index):
+                if step.ok is False:
+                    failed += 1
+                wx.CallAfter(self._append, step)
+        except Exception as exc:
+            wx.CallAfter(self._append,
+                         diagnose.Step(t("say_error", error=exc), False))
+            failed += 1
+        wx.CallAfter(self._finished, failed)
+
+    def _append(self, step) -> None:
+        self.out.AppendText(step.line() + "\n")
+        # Spoken as it happens, not only at the end: the recording step takes
+        # three seconds and the transcription several more, and silence in the
+        # middle of a diagnostic is indistinguishable from a hang.
+        spoken = step.title
+        if step.detail:
+            spoken += ". " + step.detail
+        if step.advice and not step.ok:
+            spoken += ". " + step.advice
+        self._say(spoken)
+
+    def _finished(self, failed: int) -> None:
+        message = (t("dictation_check_passed") if not failed
+                   else t("dictation_check_failed", count=failed))
+        self.out.AppendText("\n" + message + "\n")
+        self._say(message)
+        self.start.Enable(True)
+        self.start.SetLabel(t("btn_start_check"))
+        self.out.SetInsertionPoint(0)
+        self.out.SetFocus()
+
+    def _say(self, text: str) -> None:
+        try:
+            self.on_announce(text)
+        except Exception:
+            pass
+
+
 class MainWindow(wx.Frame):
     """The program's front door.
 
@@ -668,6 +865,10 @@ class MainWindow(wx.Frame):
         self.buttons = {}
         for key, handler in (
             ("transcribe", app_frame.start_transcription),
+            # A keyboard path to dictation that does not depend on the
+            # shortcut: if another program has taken Ctrl+Shift+D, this is
+            # still here, and so is the check that explains why.
+            ("dictate", app_frame.dictation.toggle),
             ("window_status", app_frame.speak_status),
             ("cancel", app_frame.cancel_job),
             ("settings", app_frame.open_settings),
@@ -732,6 +933,7 @@ class MainWindow(wx.Frame):
         self.SetTitle(t("window_title"))
         for key, string, hotkey in (
             ("transcribe", "btn_transcribe", s.hotkey_transcribe),
+            ("dictate", "btn_dictate", s.hotkey_dictate),
             ("window_status", "btn_status", s.hotkey_status),
             ("cancel", "btn_cancel_job", s.hotkey_cancel),
             ("settings", "btn_settings", s.hotkey_settings),

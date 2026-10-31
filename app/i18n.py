@@ -147,6 +147,13 @@ S: dict[str, tuple[str, str]] = {
     "help_k_status": ("Speaks what is happening and how far along it is.",
                       "ينطق حالة العمل الجاري ونسبة التقدّم."),
     "field_k_cancel": ("Cancel the current job:", "إلغاء العمل الجاري:"),
+    "field_k_dictate": ("Start and stop dictation:", "بدء وإيقاف الإملاء:"),
+    "help_k_dictate": ("Press once to start speaking, and again to have what "
+                       "you said written at the cursor. Note that Word uses "
+                       "Ctrl+Shift+D for double underline.",
+                       "اضغطه مرة لتبدأ الكلام، ومرة أخرى ليُكتب كلامك عند "
+                       "مؤشر الكتابة. انتبه أن الوورد يستخدم Ctrl+Shift+D "
+                       "للتسطير المزدوج."),
 
     "check_speak": ("Speak the status and progress automatically",
                     "نطق الحالة والتقدّم تلقائيًا"),
@@ -186,6 +193,8 @@ S: dict[str, tuple[str, str]] = {
     # Appended to the model's name in the list, so a screen reader reads it as
     # part of the row and does not have to be told which column to look in.
     "model_recommended_hint": (" (recommended)", " (موصى به)"),
+    "model_helper_hint": (" (for dictation: detects the language)",
+                          " (للإملاء: يحدّد اللغة)"),
     "col_model": ("Model", "النموذج"),
     "col_size": ("Size", "الحجم"),
     "col_state": ("State", "الحالة"),
@@ -271,6 +280,8 @@ S: dict[str, tuple[str, str]] = {
     "group_actions": ("Commands", "الأوامر"),
     "status_name": ("Program status", "حالة البرنامج"),
     "btn_transcribe": ("&Start transcribing   ({key})", "&بدء التفريغ   ({key})"),
+    "btn_dictate": ("&Dictate, start and stop   ({key})",
+                    "الإ&ملاء، بدء وإيقاف   ({key})"),
     "btn_status": ("&Read the status   ({key})", "&قراءة الحالة   ({key})"),
     "btn_cancel_job": ("Cancel the current &job   ({key})",
                        "إل&غاء العمل الجاري   ({key})"),
@@ -355,6 +366,134 @@ S: dict[str, tuple[str, str]] = {
                       "أُلغي التفريغ. ما تم إنجازه محفوظ."),
     "say_nothing_to_cancel": ("There is no job running to cancel.",
                               "لا يوجد عمل جارٍ لإلغائه."),
+
+    # ------------------------------------------------------------- dictation
+    "say_dictation_start": ("start typing", "ابدأ الكلام"),
+    "say_dictation_stop": ("stop", "توقف"),
+    "say_dictation_done": ("{words} words written.", "كُتبت {words} كلمة."),
+    "say_dictation_nothing": ("Nothing was recognised. Say it again.",
+                              "لم يُفهم أي كلام. قل ما تريد مرة أخرى."),
+    "say_dictation_not_hearing": ("I cannot hear anything. Open Settings and "
+                                  "run the dictation check.",
+                                  "لا أسمع أي صوت. افتح الإعدادات وشغّل فحص "
+                                  "الإملاء."),
+    "say_dictation_mic_failed": ("The microphone could not be opened. {error}",
+                                 "تعذّر فتح الميكروفون. {error}"),
+    "say_dictation_busy": ("A file is being transcribed. Wait for it to finish, "
+                           "then dictate.",
+                           "هناك ملف يُفرَّغ الآن. انتظر حتى ينتهي ثم أملِ."),
+    "say_dictation_clipboard": ("The text was copied to the clipboard instead.",
+                                "نُسخ النص إلى الحافظة بدلًا من ذلك."),
+    "tray_dictating": ("Dictating", "جارٍ الإملاء"),
+    "say_transcribe_while_dictating": (
+        "Dictation is running. Stop it first, then transcribe the file.",
+        "الإملاء شغّال الآن. أوقفه أولًا ثم فرّغ الملف."),
+
+    # ------------------------------------------------------- dictation check
+    "group_dictation": ("Dictation", "الإملاء"),
+    "check_remove_fillers": ("Remove hesitation sounds such as um and أمم",
+                             "حذف أصوات التردد مثل um و أمم"),
+    "help_remove_fillers": ("Only those sounds, matched whole. No word you "
+                            "actually said is removed.",
+                            "هذه الأصوات فقط، ككلمات كاملة. لا تُحذف أي كلمة "
+                            "قلتها فعلًا."),
+    "field_mic": ("Microphone:", "الميكروفون:"),
+    "mic_default": ("System default", "الافتراضي في النظام"),
+    "btn_dictation_check": ("Check dictation", "فحص الإملاء"),
+    "help_dictation_check": ("Records three seconds, measures it, and writes "
+                             "back what it heard.",
+                             "يسجّل ثلاث ثوانٍ، يقيسها، ويكتب لك ما سمعه."),
+    "dictation_check_title": ("Dictation check", "فحص الإملاء"),
+    "dictation_check_intro": ("Press Start, then speak normally for three "
+                              "seconds.",
+                              "اضغط ابدأ ثم تكلّم بشكل عادي لمدة ثلاث ثوانٍ."),
+    "dictation_check_results": ("Results", "النتائج"),
+    "dictation_check_running": ("Checking...", "جارٍ الفحص..."),
+    "dictation_check_speak_now": ("Speak now.", "تكلّم الآن."),
+    "dictation_check_passed": ("Dictation is ready.", "الإملاء جاهز."),
+    "dictation_check_failed": ("{count} problems were found. Each one says "
+                               "what to do.",
+                               "وُجدت {count} مشكلة. كل واحدة مكتوب بجانبها "
+                               "ما يجب عمله."),
+    "btn_start_check": ("Start", "ابدأ"),
+
+    "chk_devices": ("A microphone is present", "يوجد ميكروفون"),
+    "chk_devices_found": ("{count} inputs. Using: {name}",
+                          "{count} مدخل صوت. المستخدَم: {name}"),
+    "chk_devices_fix": ("No recording device was found. Plug in a microphone "
+                        "or headset.",
+                        "لم يُعثر على جهاز تسجيل. وصّل ميكروفون أو سماعة رأس."),
+    "chk_permission": ("Windows allows microphone access",
+                       "ويندوز يسمح بالوصول إلى الميكروفون"),
+    "chk_permission_fix": ("Open Windows Settings, Privacy and security, "
+                           "Microphone, and turn on both the microphone and "
+                           "\"Let desktop apps access your microphone\".",
+                           "افتح إعدادات ويندوز، الخصوصية والأمان، الميكروفون، "
+                           "وفعّل الميكروفون و«السماح لتطبيقات سطح المكتب "
+                           "بالوصول إلى الميكروفون»."),
+    "chk_open": ("The microphone opened", "تم فتح الميكروفون"),
+    "chk_open_ok": ("recorded for {seconds} seconds",
+                    "تم التسجيل لمدة {seconds} ثانية"),
+    "chk_open_fix": ("Another program may be holding the microphone. Close "
+                     "meeting and recording applications and try again.",
+                     "قد يكون برنامج آخر ماسكًا الميكروفون. أغلق برامج "
+                     "الاجتماعات والتسجيل وحاول مرة أخرى."),
+    "chk_level": ("Sound is arriving", "يصل صوت فعلًا"),
+    "chk_level_detail": ("loudest {peak}, average {rms}",
+                         "أعلى مستوى {peak}، المتوسط {rms}"),
+    "chk_level_silent": ("Nothing at all was recorded. The microphone is "
+                         "muted, or this is the wrong device.",
+                         "لم يُسجَّل أي صوت. الميكروفون مكتوم، أو هذا هو "
+                         "الجهاز الخطأ."),
+    "chk_level_quiet": ("Too quiet to recognise. Speak closer, or raise the "
+                        "microphone level in Windows sound settings.",
+                        "الصوت أضعف من أن يُفهم. اقترب من الميكروفون، أو ارفع "
+                        "مستواه من إعدادات الصوت في ويندوز."),
+    "chk_level_loud": ("Too loud - the sound is being cut off at the top. "
+                       "Lower the microphone level in Windows sound settings.",
+                       "الصوت عالٍ جدًا ويُقطَع من أعلى. اخفض مستوى الميكروفون "
+                       "من إعدادات الصوت في ويندوز."),
+    "chk_voice": ("A voice was found in it", "عُثر على صوت كلام"),
+    "chk_voice_detail": ("{seconds} seconds of speech",
+                         "{seconds} ثانية من الكلام"),
+    "chk_voice_fix": ("Sound arrived but no speech was found in it. Say a few "
+                      "words while the check is recording.",
+                      "وصل صوت لكن لم يُعثر فيه على كلام. قل بضع كلمات أثناء "
+                      "التسجيل."),
+    "chk_recognised": ("The words came back", "رجعت الكلمات مكتوبة"),
+    "chk_recognised_fix": ("Sound and speech were found, but nothing was "
+                           "recognised. Try again, speaking a full sentence.",
+                           "وُجد صوت وكلام لكن لم يُفهم شيء. حاول مرة أخرى "
+                           "بجملة كاملة."),
+    "chk_speed": ("Speed on this computer", "السرعة على هذا الجهاز"),
+    "chk_speed_detail": ("{seconds} seconds to write {audio} seconds of "
+                         "speech. Dictation waits about that long after you "
+                         "press stop.",
+                         "{seconds} ثانية لكتابة {audio} ثوانٍ من الكلام. "
+                         "الإملاء ينتظر هذه المدة تقريبًا بعد ضغط الإيقاف."),
+    "chk_model": ("The model is loaded", "النموذج محمّل"),
+    "chk_model_fix": ("Wait for the model to finish loading, or download it "
+                      "from Model files above.",
+                      "انتظر حتى ينتهي تحميل النموذج، أو نزّله من «ملفات "
+                      "النماذج» بالأعلى."),
+    "chk_hotkey": ("The dictation shortcut is available",
+                   "اختصار الإملاء متاح"),
+    "chk_hotkey_fix": ("Windows refused {key}, which means another program "
+                       "already owns it. Choose a different shortcut.",
+                       "رفض ويندوز الاختصار {key}، أي أن برنامجًا آخر يملكه. "
+                       "اختر اختصارًا مختلفًا."),
+    "chk_word": ("Word is open", "الوورد مفتوح"),
+    "chk_word_fix": ("Open Microsoft Word with a document. Dictation writes "
+                     "at the cursor there.",
+                     "افتح مايكروسوفت وورد ومعه مستند. الإملاء يكتب عند مؤشر "
+                     "الكتابة فيه."),
+    "chk_other_device": ("Another device", "جهاز آخر"),
+    "chk_other_device_found": ("{name} did record sound. Choose it as the "
+                               "microphone above.",
+                               "الجهاز {name} سجّل صوتًا فعلًا. اختره "
+                               "كميكروفون بالأعلى."),
+    "chk_other_device_none": ("No other input recorded anything either.",
+                              "لا يوجد مدخل آخر سجّل أي صوت كذلك."),
     "say_error": ("Something went wrong. {error}", "حدث خطأ. {error}"),
     "say_settings_saved": ("Settings saved.", "حُفظت الإعدادات."),
     "say_settings_cancelled": ("Settings cancelled.", "أُلغيت الإعدادات."),
@@ -436,7 +575,24 @@ Program window: status and every command in one place, including Exit.
 Settings: opens the settings window.
 Read the status: speaks what is happening, how far along it is, and the time left.
 Cancel the current job: stops transcribing. Work already done is kept.
+Start and stop dictation: speak instead of typing. See below.
 All shortcuts can be changed in Settings.
+
+Dictation
+Press the dictation shortcut once and the program says "start typing". Speak
+normally. Press the same shortcut again and what you said is written at the
+cursor. The work happens while you are still speaking, so the wait after you
+press stop is only for the last phrase - about a second or two.
+A tone marks each change as well as the spoken word, because a tone arrives
+immediately and speech waits for the screen reader to be free.
+If nothing is written, open Settings and press Check dictation. It records
+three seconds, measures them, and writes back what it heard, with a sentence
+for anything that is wrong. Windows can report a microphone as working while
+it records nothing at all, which is why the check records rather than reads
+settings.
+Note that Ctrl+Shift+D is also Word's own shortcut for double underline.
+While Sada is running, Sada gets it. Change it in Settings if you would
+rather keep the Word shortcut.
 
 Notes for screen reader users
 The text is inserted once at the end rather than a paragraph at a time, so the
