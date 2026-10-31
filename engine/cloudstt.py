@@ -59,7 +59,11 @@ CANDIDATES = (
 DEFAULT_MODEL = CANDIDATES[0]
 PROBE_TIMEOUT_S = 25
 SAMPLE_RATE = 16000
-TIMEOUT_S = 30
+# Generous, because the alternative is not failure - it is the local model
+# writing the segment, which costs a few seconds anyway. Measured replies
+# ranged from 1.7 s to 10.2 s for the same length of audio, so the variance
+# is the API's, not ours.
+TIMEOUT_S = 45
 
 # Speech runs at roughly two to four words a second. Far outside that, the
 # reply is not a transcript of this audio: too few means most of it was
