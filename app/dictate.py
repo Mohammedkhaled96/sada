@@ -20,7 +20,7 @@ import wx
 
 from app import wordio
 from app.i18n import t
-from engine import mic, polish
+from engine import cloudstt, mic, polish
 from engine.dictation import SAMPLE_RATE, Dictation, Result
 from engine.textout import is_rtl
 
@@ -127,6 +127,9 @@ class DictationController:
             polisher=polish.make(settings.dictation_ai,
                                  settings.dictation_ai_key,
                                  settings.dictation_ai_model),
+            cloud=cloudstt.make(settings.dictation_ai,
+                                settings.dictation_ai_key,
+                                settings.dictation_ai_model),
         )
         self._stop.clear()
         self._abandoned = False
@@ -238,9 +241,15 @@ class DictationController:
         tone(TONE_DONE)
         # Said differently when the model changed something, so the user knows
         # the words in their document are not only the ones they spoke.
-        said = ("say_dictation_repaired" if self.session is not None
-                and getattr(self.session, "polished", False)
-                else "say_dictation_done")
+        session = self.session
+        if session is not None and getattr(session, "fell_back", False):
+            # Not silently: the user chose Google, and what they got was the
+            # local model. They should know which one wrote their document.
+            said = "say_dictation_fellback"
+        elif session is not None and getattr(session, "polished", False):
+            said = "say_dictation_repaired"
+        else:
+            said = "say_dictation_done"
         self.frame.say(t(said, words=len(result.text.split())), interrupt=True)
         try:
             wordio.get_word().Activate()

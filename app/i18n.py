@@ -186,7 +186,8 @@ S: dict[str, tuple[str, str]] = {
                       "ثم أعد المحاولة."),
 
     # ------------------------------------------------------------ model files
-    "group_models": ("Model files", "ملفات النماذج"),
+    "group_models": ("Model - select the one to use, and download it here",
+                     "النموذج - اختر الذي تريد استخدامه، ونزّله من هنا"),
     "model_installed": ("installed", "مُنزَّل"),
     "model_not_installed": ("not installed", "غير مُنزَّل"),
     "model_partial": ("incomplete download", "تحميل غير مكتمل"),
@@ -398,26 +399,31 @@ S: dict[str, tuple[str, str]] = {
                             "هذه الأصوات فقط، ككلمات كاملة. لا تُحذف أي كلمة "
                             "قلتها فعلًا."),
     "field_mic": ("Microphone:", "الميكروفون:"),
-    "field_ai": ("Repair with AI:", "الإصلاح بالذكاء الاصطناعي:"),
-    "ai_off": ("Off - nothing leaves this computer",
-               "مغلق - لا شيء يغادر هذا الجهاز"),
-    "ai_gemini": ("Google Gemini - needs a key and the internet",
-                  "جوجل Gemini - يحتاج مفتاحًا وإنترنت"),
-    "help_ai": ("Applies corrections you spoke out loud, repairs misheard "
-                "words, and writes emoji you asked for. It SENDS WHAT YOU "
-                "DICTATED to Google. Everything else in this program stays on "
-                "your computer; this does not.",
-                "يطبّق التصحيحات اللي قلتها بصوتك، ويصلّح الكلمات اللي "
-                "اتسمعت غلط، ويكتب الإيموجي اللي طلبته. وهو **يرسل ما أمليته** "
-                "إلى جوجل. كل شيء آخر في البرنامج يبقى على جهازك، إلا هذا."),
+    "field_ai": ("Dictation engine:", "محرّك الإملاء:"),
+    "ai_local": ("On this computer - nothing is sent anywhere",
+                 "على هذا الجهاز - لا يُرسل أي شيء لأي مكان"),
+    "ai_repair": ("On this computer, then Google repairs the text",
+                  "على هذا الجهاز، ثم جوجل يصلّح النص"),
+    "ai_gemini": ("Google hears the audio - best for spoken Arabic",
+                  "جوجل يسمع الصوت - الأفضل للعربية المحكية"),
+    "help_ai": ("On this computer is the default and sends nothing anywhere. "
+                "The other two SEND YOUR DICTATION to Google and need a key "
+                "and a connection. Google hears the audio is much better at "
+                "Egyptian and other spoken Arabic, where the local model is "
+                "weakest. If Google fails, the local model writes it instead.",
+                "«على هذا الجهاز» هو الافتراضي ولا يرسل أي شيء لأي مكان. "
+                "الخياران الآخران **يرسلان ما تمليه** إلى جوجل ويحتاجان "
+                "مفتاحًا واتصالًا. و«جوجل يسمع الصوت» أفضل بكثير في العامية "
+                "المصرية والعربية المحكية، وهي أضعف نقطة في النموذج المحلي. "
+                "ولو فشل جوجل، يكتبها النموذج المحلي بدلًا منه."),
     "field_ai_key": ("Gemini API key:", "مفتاح Gemini:"),
     "help_ai_key": ("From aistudio.google.com. Stored encrypted for your "
                     "Windows account, not as plain text.",
                     "من aistudio.google.com. يُحفَظ مشفّرًا لحساب ويندوز "
                     "الخاص بك، وليس كنص صريح."),
-    "chk_ai": ("AI repair", "الإصلاح بالذكاء الاصطناعي"),
-    "chk_ai_off": ("Off. The dictation is written exactly as it was heard.",
-                   "مغلق. يُكتب الإملاء كما سُمع تمامًا."),
+    "chk_ai": ("Dictation engine", "محرّك الإملاء"),
+    "chk_ai_off": ("On this computer. Nothing is sent anywhere.",
+                   "على هذا الجهاز. لا يُرسل أي شيء لأي مكان."),
     "chk_ai_ok": ("Working, model {model}", "يعمل، النموذج {model}"),
     "chk_ai_fix": ("The key was refused: {error}. Check it in Settings, or "
                    "set AI repair to Off.",
@@ -425,6 +431,10 @@ S: dict[str, tuple[str, str]] = {
                    "الإصلاح بالذكاء الاصطناعي مغلقًا."),
     "say_dictation_repaired": ("{words} words written and repaired.",
                                "كُتبت {words} كلمة بعد الإصلاح."),
+    "say_dictation_fellback": ("Google could not be reached. {words} words "
+                               "written on this computer instead.",
+                               "تعذّر الوصول إلى جوجل. كُتبت {words} كلمة "
+                               "على هذا الجهاز بدلًا من ذلك."),
     "field_corrections": ("Always correct:", "تصحيحات دائمة:"),
     "help_corrections": ("One per line, wrong = right. Applied to dictation "
                          "exactly as written, whole words only.",
@@ -623,14 +633,22 @@ so Arabic stays in Arabic letters and English in Latin ones.
 On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
-If you want more than that, Settings has Repair with AI. Turned on, it applies
-corrections you spoke out loud - say "at six thirty, no, make it eight" and the
-text says eight - repairs words that were clearly misheard, and writes an emoji
-where you asked for one. It is off to begin with, and it is the only part of
-this program that sends anything anywhere: your dictation goes to Google, and
-it needs a key of yours from aistudio.google.com. If the reply comes back
-looking like a rewrite rather than a repair, it is thrown away and you get
-exactly what you said.
+Settings has a Dictation engine with three choices. On this computer is the
+default and sends nothing anywhere. The other two need a key of yours from
+aistudio.google.com, and they are the only part of this program that sends
+anything out.
+Google hears the audio is the one to pick for spoken Arabic. The local model
+learnt mostly written Arabic, so a dictated Egyptian sentence comes back part
+wrong - and once a word has been misheard, nothing can put it back. A model
+that hears the recording itself can. It also applies corrections you say out
+loud: "at six thirty, no, make it eight" is written as eight. And it writes an
+emoji where you ask for one.
+On this computer, then Google repairs the text keeps the audio here and sends
+only the words, which is less private than the first and more private than the
+second.
+Whichever you choose, if Google cannot be reached the local model writes it
+instead and says so, and a reply that looks like a rewrite rather than a
+transcript is thrown away.
 If a name always comes out wrong, put it in Settings under Always correct, one
 per line, as wrong = right. Those replacements are applied exactly as written.
 If nothing is written, open Settings and press Check dictation. It records
@@ -707,12 +725,18 @@ carries on from where it stopped.
 بحروفه، فالعربي يفضل عربي والإنجليزي يفضل لاتيني.
 ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
 النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
-ولو عايز أكتر من كده، في الإعدادات «الإصلاح بالذكاء الاصطناعي». لما تشغّله
-بيطبّق التصحيحات اللي قلتها بصوتك — تقول «الساعة ستة ونص، لا لا خليها تمانية»
-فيكتب تمانية — ويصلّح الكلمات اللي اتسمعت غلط، ويكتب الإيموجي اللي طلبته.
-وهو مقفول من الأول، وهو الجزء الوحيد في البرنامج اللي بيبعت أي حاجة لبرّه:
-الإملاء بتاعك بيروح لجوجل، وبيحتاج مفتاح بتاعك من aistudio.google.com. ولو
-الرد رجع شكله إعادة كتابة مش إصلاح، بيتترمي وبتاخد اللي قلته بالظبط.
+في الإعدادات «محرّك الإملاء» وفيه ثلاث اختيارات. «على هذا الجهاز» هو
+الافتراضي وما بيبعتش أي حاجة لأي مكان. والاتنين التانيين محتاجين مفتاح بتاعك
+من aistudio.google.com، وهما الجزء الوحيد في البرنامج اللي بيبعت حاجة لبرّه.
+«جوجل يسمع الصوت» هو اللي تختاره للعربي المحكي. النموذج المحلي اتعلّم عربي
+مكتوب في الأغلب، فالجملة المصرية بترجع ناقصة — ولما الكلمة تتسمع غلط مافيش
+حاجة بترجّعها. النموذج اللي بيسمع التسجيل نفسه يقدر. وهو كمان بيطبّق التصحيحات
+اللي بتقولها بصوتك: «الساعة ستة ونص، لا لا خليها تمانية» تتكتب تمانية. وبيكتب
+الإيموجي اللي بتطلبه.
+و«على هذا الجهاز ثم جوجل يصلّح النص» بيخلّي الصوت عندك ويبعت الكلام بس، يعني
+خصوصية أقل من الأول وأكتر من التاني.
+وأيًا كان اختيارك: لو جوجل ماردّش، النموذج المحلي بيكتبها ويقول لك، والرد اللي
+شكله إعادة كتابة مش تفريغ بيتترمي.
 ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
 كل سطر بالشكل: الخطأ = الصواب. التصحيحات دي بتتطبّق حرفيًا زي ما كتبتها.
 وإذا لم يُكتب شيء، افتح الإعدادات واضغط «فحص الإملاء». يسجّل ثلاث ثوانٍ،

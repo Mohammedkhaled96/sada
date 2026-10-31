@@ -184,15 +184,15 @@ def run(frame, device_index: int | None = None, ai=None):
     provider, key, model = ai or (frame.settings.dictation_ai,
                                   frame.settings.dictation_ai_key,
                                   frame.settings.dictation_ai_model)
-    if provider == "off":
+    if provider == "local":
         yield Step(t("chk_ai"), None, t("chk_ai_off"))
     else:
-        from engine import polish
+        from engine import cloudstt, polish
 
-        polisher = polish.make(provider, key, model)
+        engine = (cloudstt.make(provider, key, model) if provider == "gemini"
+                  else polish.make(provider, key, model))
         try:
-            model = polisher.check()
-            yield Step(t("chk_ai"), True, t("chk_ai_ok", model=model))
+            yield Step(t("chk_ai"), True, t("chk_ai_ok", model=engine.check()))
         except Exception as exc:
             yield Step(t("chk_ai"), False, "", t("chk_ai_fix", error=exc))
 

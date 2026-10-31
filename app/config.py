@@ -30,7 +30,12 @@ SETTINGS_FILE = paths.SETTINGS_FILE
 LEGACY_SETTINGS_FILE = paths.LEGACY_STATE_DIR / "settings.json"
 
 MODELS = ["turbo", "large-v3", "medium", "small"]
-AI_PROVIDERS = ["off", "gemini"]
+# What writes the dictation down.
+#   local  - Whisper on this machine. Nothing leaves it. The default.
+#   repair - Whisper writes it, then Google repairs the text.
+#   gemini - Google hears the audio itself. Much better on spoken Arabic,
+#            and the audio leaves the machine.
+AI_PROVIDERS = ["local", "repair", "gemini"]
 DEVICES = ["auto", "cuda", "cpu"]
 INSERT_MODES = ["cursor", "end", "new"]
 LANGUAGES = ["auto", "ar", "en", "fr", "de", "es", "tr", "ur", "fa"]
@@ -88,9 +93,9 @@ class Settings:
     # one who knows which way, so they say it once instead of fixing it by
     # hand after every dictation.
     dictation_corrections: str = ""
-    # "off" or "gemini". Off means nothing this program does leaves the
+    # See AI_PROVIDERS. "local" means nothing this program does leaves the
     # machine, which is the promise everything else here keeps.
-    dictation_ai: str = "off"
+    dictation_ai: str = "local"
     dictation_ai_key: str = ""
     dictation_ai_model: str = "gemini-2.0-flash"
     dictation_device: str = ""              # empty means the system default
@@ -125,7 +130,7 @@ class Settings:
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
         if self.dictation_ai not in AI_PROVIDERS:
-            self.dictation_ai = "off"
+            self.dictation_ai = "local"
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):

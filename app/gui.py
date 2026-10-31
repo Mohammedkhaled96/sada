@@ -163,9 +163,13 @@ class SettingsDialog(wx.Dialog):
         g = wx.FlexGridSizer(0, 2, PAD, PAD)
         g.AddGrowableCol(1, 1)
 
-        self.model = wx.Choice(eng.GetStaticBox(), choices=model_labels())
-        self.model.SetSelection(MODELS.index(settings.model))
-        _row(g, eng.GetStaticBox(), t("field_model"), self.model, t("help_model"))
+        # No model chooser here. The same four models were listed twice in
+        # this one window - once as a dropdown and again, with their sizes and
+        # whether they were downloaded, under Model files. Two controls for one
+        # decision, and the dropdown was the one that could not tell you
+        # whether the model it named was even on the machine. The list below
+        # is now the only place a model is chosen: whichever row is selected
+        # when Settings is closed is the model that transcribes.
 
         self.device = wx.Choice(eng.GetStaticBox(), choices=device_labels())
         self.device.SetSelection(DEVICES.index(settings.device))
@@ -383,7 +387,9 @@ class SettingsDialog(wx.Dialog):
         new_ui = UI_LANGUAGES[self.ui_language.GetSelection()]
         self.language_changed = new_ui != s.ui_language
         s.ui_language = new_ui
-        s.model = MODELS[self.model.GetSelection()]
+        chosen = self._selected_model()
+        if chosen is not None and chosen.key in MODELS:
+            s.model = chosen.key
         s.device = DEVICES[self.device.GetSelection()]
         s.language = LANGUAGES[self.language.GetSelection()]
         s.hotwords = self.hotwords.GetValue().strip()
@@ -663,7 +669,6 @@ class SettingsDialog(wx.Dialog):
             return
         d = Settings()
         self.ui_language.SetSelection(UI_LANGUAGES.index(d.ui_language))
-        self.model.SetSelection(MODELS.index(d.model))
         self.device.SetSelection(DEVICES.index(d.device))
         self.language.SetSelection(LANGUAGES.index(d.language))
         self.hotwords.SetValue(d.hotwords)
@@ -676,10 +681,19 @@ class SettingsDialog(wx.Dialog):
         self.k_settings.SetValue(d.hotkey_settings)
         self.k_status.SetValue(d.hotkey_status)
         self.k_cancel.SetValue(d.hotkey_cancel)
+        self.k_dictate.SetValue(d.hotkey_dictate)
+        self.mic.SetSelection(0)
+        self.remove_fillers.SetValue(d.dictation_remove_fillers)
+        self.corrections.SetValue(d.dictation_corrections)
+        self.ai.SetSelection(AI_PROVIDERS.index(d.dictation_ai))
+        # The key is not cleared. Reset puts the settings back; it is not a
+        # way to lose something the user pasted in from somewhere else.
         self.speak.SetValue(d.speak)
         self.progress_every.SetValue(d.speak_progress_every)
         self.sapi.SetValue(d.speak_via_sapi)
         self.only_word.SetValue(d.only_when_word_focused)
+        self.settings.model = d.model
+        self.refresh_models()
         self.was_reset = True
         self.ui_language.SetFocus()
         if self.on_announce:

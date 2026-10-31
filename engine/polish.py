@@ -226,6 +226,9 @@ def _first_text(reply: dict) -> str | None:
 
 
 def make(kind: str, api_key: str = "", model: str = DEFAULT_MODEL):
-    if kind == "gemini":
+    # Only "repair" polishes text. With "gemini" the same model already heard
+    # the audio, so running it over its own output would be a second chance to
+    # drift with nothing gained.
+    if kind == "repair":
         return GeminiPolisher(api_key, model)
     return NullPolisher()

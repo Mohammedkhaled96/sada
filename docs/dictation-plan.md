@@ -322,14 +322,32 @@ second segment in an 8-second window, which measures **2.8 s**.
 Stages 1-3 are tested without a GUI and without a microphone, from recorded
 files — which is how this was verified rather than demonstrated.
 
-## 11. Repair with a language model — added later, off by default
+## 11. Google as a dictation engine — added later, off by default
 
 The rule in §1 was "we transcribe what was said, we do not improve it", and it
 held until the user asked for the opposite with a concrete example: they said
 "الساعة ستة ونص… لا لا، خليها ساعة تمانية" and wanted the text to say eight.
-That is not something rules can do. It needs a model that understands the
-sentence. Asked again after the objection was made, so it is built — under
-guard, and off unless switched on.
+That is not something rules can do. Asked again after the objection was made,
+so it is built — under guard, and off unless switched on.
+
+There are three settings now, not two, and the difference matters:
+
+| Dictation engine | What happens | Leaves the machine |
+|---|---|---|
+| **On this computer** (default) | Whisper writes it | nothing |
+| On this computer, then Google repairs | Whisper writes it, Gemini repairs the text | the text |
+| **Google hears the audio** | Gemini transcribes the recording itself | the audio |
+
+The third is the one that answers the complaint properly. The failing example
+was not bad editing, it was *mis-hearing*: Whisper was trained mostly on
+written-register Arabic, so a dictated Egyptian sentence comes back part-wrong,
+and no post-editor recovers words that were never heard. A model that hears the
+audio can. It also makes `engine/langmap.py` unnecessary on that path — one
+model hearing the whole segment decides its own languages, which is what the
+splitting exists to imitate when it cannot.
+
+Whichever one is chosen, a failure falls back to the local model and says so
+out loud, rather than losing what the user just said to a network error.
 
 ### Which model, and why that one
 

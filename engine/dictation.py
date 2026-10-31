@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from engine import cleanup, fillers, langmap, window
+from engine.cloudstt import LocalOnly, script_of
 from engine.polish import NullPolisher
 from engine.window import short_window
 
@@ -242,6 +243,7 @@ class Dictation:
                  hotwords: str | None = None,
                  corrections: str | None = None,
                  polisher=None,
+                 cloud=None,
                  max_total_s: float = MAX_TOTAL_S):
         self.backend = backend
         # Whether language detection is cheap enough to do per segment.
@@ -253,9 +255,12 @@ class Dictation:
         self.hotwords = (hotwords or "").strip() or None
         self.corrections = cleanup.parse_corrections(corrections or "")
         self.polisher = polisher or NullPolisher()
+        self.cloud = cloud or LocalOnly()
+        self.fell_back = False
         self._written = ""
         self.polished = False
         self.polish_note = ""
+        self.cloud_note = ""
         self.max_total_s = max_total_s
 
         self.segmenter = Segmenter()
@@ -377,6 +382,14 @@ class Dictation:
         """One segment, which may be in more than one language."""
         started = time.time()
 
+        if getattr(self.cloud, "available", False):
+            text = self._transcribe_cloud(segment)
+            if text is not None:
+                self._compute_s += time.time() - started
+                return text, script_of(text)
+            # Fell through: the local model writes it instead, below, rather
+            # than the user losing what they just said to a network error.
+
         if self.forced_language:
             runs = [langmap.Run(0, len(segment), self.forced_language)]
         else:
@@ -396,6 +409,27 @@ class Dictation:
 
         self._compute_s += time.time() - started
         return " ".join(texts).strip(), langmap.majority(runs)
+
+    def _transcribe_cloud(self, segment: np.ndarray) -> str | None:
+        """Send the audio itself. None means fall back to the local model.
+
+        No language splitting and no detection pass: one model hearing the
+        whole segment decides its own languages, which is the arrangement
+        engine/langmap.py exists to imitate when it cannot.
+        """
+        try:
+            text = self.cloud.transcribe(segment, self.forced_language)
+        except Exception as exc:
+            self.fell_back = True
+            self.cloud_note = str(exc)
+            self.on_state("fallback", message=str(exc))
+            return None
+        if self.remove_fillers and text:
+            if fillers.is_all_filler(text):
+                self._dropped += 1
+                return ""
+            text = fillers.strip_fillers(text)
+        return cleanup.tidy(text)
 
     def _transcribe_run(self, audio: np.ndarray, language: str | None) -> str:
         """One stretch of audio known to be in a single language."""
