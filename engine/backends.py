@@ -99,7 +99,7 @@ class OpenAIWhisperBackend:
     # real hotwords parameter, is the backend that cannot be used here.
     DROP = {"vad_filter", "vad_parameters", "repetition_penalty",
             "no_repeat_ngram_size", "max_new_tokens", "chunk_length",
-            "multilingual", "language_detection_threshold",
+            "multilingual", "language_detection_threshold", "chunk_target_s",
             "language_detection_segments", "max_initial_timestamp",
             "prompt_reset_on_temperature", "clip_timestamps"}
     RENAME = {"log_prob_threshold": "logprob_threshold"}
@@ -164,7 +164,12 @@ class OpenAIWhisperBackend:
         clip = opts.get("clip_timestamps")
         skip_before = float(clip[0]) if clip else 0.0
 
-        chunks = plan_chunks(audio)
+        # Dictation asks for sentence-sized chunks so each one can be in its
+        # own language. A file keeps the 90-second default: chopping a
+        # recording that finely would multiply the calls and, with each one
+        # detecting its own language, let a stray chunk come back in the
+        # wrong script - which is exactly what it did.
+        chunks = plan_chunks(audio, target_s=opts.get("chunk_target_s") or 90.0)
         next_id = 0
         for start_sample, end_sample in chunks:
             start_s = start_sample / SAMPLE_RATE

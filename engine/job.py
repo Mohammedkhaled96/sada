@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from engine.audio import SAMPLE_RATE, decode_audio
-from engine.langdetect import detect_language    # noqa: F401  (CLI uses it)
+from engine.chunking import SHORT_TARGET_S
+from engine.langdetect import detect_language
 from engine.textout import build_paragraphs, is_rtl, write_outputs
 
 # These specific values are what keeps Whisper from hallucinating on long
@@ -131,6 +132,7 @@ def run_transcription(
     timestamps: bool = False,
     hotwords: str | None = None,
     resume: bool = False,
+    dictation: bool = False,
     on_progress=None,
     cancel: threading.Event | None = None,
 ) -> dict:
@@ -168,21 +170,30 @@ def run_transcription(
     report(duration=duration)
 
     # -------------------------------------------------------------- language
-    # A language the user chose is forced on every chunk. Left on automatic,
-    # nothing is forced at all: each chunk is handed to the model with no
-    # language and decides its own, so a recording that moves between Arabic,
-    # English and Spanish is written in three scripts instead of one.
+    # Transcribing a file: one language for the whole of it, detected by a
+    # vote over samples taken from several places. That is what this has
+    # always done and it stays that way.
     #
-    # The whole-file vote that used to happen here is why that failed before.
-    # It asked the opening of the file, decided "Arabic", and then forced
-    # Arabic on the English half, which came back in Arabic letters. One
-    # answer per file cannot describe a file with three languages in it.
+    # Dictating: nothing is forced. Each chunk is handed over with no language
+    # and decides its own, so a few sentences that move between Arabic,
+    # English and Spanish come back in three scripts.
+    #
+    # The difference is not a preference. Letting every chunk of a FILE decide
+    # for itself ended an hour of Arabic with
+    # "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters, because
+    # one chunk near the end was heard as English. A vote cannot do that, and
+    # a file is long enough for a vote to be right.
     check_cancel()
     spoken: list[str] = []
     if language:
         report(state="detecting", language=language, language_confidence=1.0)
+    elif dictation:
+        report(state="detecting", message="detecting the language")
     else:
         report(state="detecting", message="detecting the language")
+        lang, conf, _votes = detect_language(backend, audio, log=lambda *a: None)
+        language = lang
+        report(language=lang, language_confidence=conf)
 
     # ------------------------------------------------------------ transcribe
     # Resuming is only safe when the backend can actually be told to skip the
@@ -205,6 +216,8 @@ def run_transcription(
         report(segments=len(segments), position=resume_from)
 
     opts = dict(DECODE_OPTS)
+    if dictation:
+        opts["chunk_target_s"] = SHORT_TARGET_S
     if resume_from > 0:
         opts["clip_timestamps"] = [resume_from, duration]
     if hotwords:

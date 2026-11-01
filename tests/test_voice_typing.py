@@ -157,7 +157,8 @@ check("dictation does not transcribe anything itself",
 # ------------------------------------------------- more than one language
 print("\n--- a dictation that changes language ---")
 
-from engine.chunking import SAMPLE_RATE, plan_chunks, speech_regions  # noqa: E402
+from engine.chunking import (SAMPLE_RATE, SHORT_TARGET_S, plan_chunks,
+                             speech_regions)  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests"))
 import speechgen                                                   # noqa: E402
@@ -179,7 +180,7 @@ else:
     # script, so the chunk is the unit a speaker can change language in. Given
     # all three sentences in one call it detected Arabic, wrote the Arabic and
     # stopped - ten seconds of speech lost. Measured, on this recording.
-    chunks = plan_chunks(mixed)
+    chunks = plan_chunks(mixed, target_s=SHORT_TARGET_S)
     regions = speech_regions(mixed)
     check("a short recording is chunked by sentence, not in one piece",
           len(chunks) >= 3,
@@ -191,12 +192,26 @@ else:
     check("and the chunks cover the whole recording",
           chunks[0][0] <= regions[0]["start"] and chunks[-1][1] >= regions[-1]["end"])
 
-    # A long recording keeps long chunks: an hour of audio must not become
-    # 1,400 calls because dictation wanted sentence-sized ones.
+    # And a file is never chunked that way, however short it is. Letting
+    # every chunk of a file pick its own language ended an hour of Arabic
+    # with "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters,
+    # because one chunk near the end was heard as English.
+    check("a file is not chunked by sentence, whatever its length",
+          len(plan_chunks(mixed)) == 1,
+          f"{len(plan_chunks(mixed))} chunks for {len(mixed) / SAMPLE_RATE:.0f}s")
     long_audio = np.tile(mixed, 20)[: 20 * 60 * SAMPLE_RATE]
     per_minute = len(plan_chunks(long_audio)) / (len(long_audio) / SAMPLE_RATE / 60)
-    check("but a long recording does not", per_minute < 10,
+    check("and a long one is chunked as it always was", per_minute < 10,
           f"{per_minute:.1f} chunks a minute")
+
+    job_source = (ROOT / "engine" / "job.py").read_text(encoding="utf-8")
+    check("a file gets one language, voted over the whole of it",
+          "lang, conf, _votes = detect_language(" in job_source)
+    check("and only dictation skips that vote",
+          "elif dictation:" in job_source)
+    check("only dictation asks for sentence chunks",
+          "dictation=True" in (ROOT / "app" / "dictate.py").read_text(encoding="utf-8")
+          and 'opts["chunk_target_s"] = SHORT_TARGET_S' in job_source)
 
     from engine.models import info                                 # noqa: E402
 
@@ -208,7 +223,9 @@ else:
         from engine.job import DECODE_OPTS                         # noqa: E402
 
         backend = load_backend("openai", "turbo", pick_device("cpu"))
-        rows = list(backend.stream_segments(mixed, None, dict(DECODE_OPTS)))
+        opts = dict(DECODE_OPTS)
+        opts["chunk_target_s"] = SHORT_TARGET_S
+        rows = list(backend.stream_segments(mixed, None, opts))
         text = " ".join(r["text"] for r in rows)
 
         def arabic_letters(s):

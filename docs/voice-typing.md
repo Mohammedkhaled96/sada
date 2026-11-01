@@ -159,11 +159,10 @@ sentences in a single call it did worse than write them in the wrong script:
 it detected Arabic, wrote the Arabic sentence, and **stopped** - ten seconds
 of speech lost, measured on exactly that recording.
 
-So the chunk is the unit a speaker can change language in, and for a short
-recording the chunks are **one sentence each**: `engine/chunking.py` closes a
-chunk at the first pause after 2.5 seconds when the recording is under three
-minutes. Each chunk is then handed to the model with no language at all and
-decides its own.
+So the chunk is the unit a speaker can change language in, and **a dictation**
+is chunked **one sentence each**: `engine/chunking.py` closes a chunk at the
+first pause after 2.5 seconds. Each chunk is then handed to the model with no
+language at all and decides its own.
 
 ```
 speech regions   0.3-2.2   2.4-4.8   6.0-8.6   10.1-14.0
@@ -171,21 +170,28 @@ chunks           0.1-5.0   5.8-8.8   9.9-14.2
                  Arabic    English   Spanish
 ```
 
-Nothing is forced and nothing is voted on. The whole-file language vote that
-used to happen first is why this failed before: it sampled the opening,
-decided "Arabic", and forced Arabic on the English half, which came back in
-Arabic letters. One answer per file cannot describe a file with three
-languages in it.
-
 The cost is one extra encoder pass per chunk, because detecting is a pass.
 The shortened window in §3 is what makes that affordable: a 2.5-second chunk
 is encoded in an 8-second window, not a 30-second one.
 
-A language the user has chosen in Settings is still forced on every chunk, and
+A language the user has chosen in Settings is still forced on every chunk and
 skips detection entirely. Automatic is the default.
 
-Longer recordings keep 90-second chunks, so transcribing an hour of audio is
-not turned into 1,400 calls.
+### Transcribing a file does none of this
+
+**A file gets one language, voted over the whole of it**, in 90-second chunks
+- exactly as it always has. The job carries a `dictation` flag and only
+dictation sets it.
+
+That distinction is not a preference, it is a bug fix. Letting every chunk of
+a *file* decide for itself ended an hour of Arabic with
+
+> ...إلى ملفات نصية **Wassalamualaikum warahmatullahi wabarakatuh**
+
+because one chunk near the end was heard as English and transliterated. A
+vote over the whole file cannot do that, and a file is long enough for a vote
+to be right. A dictation is a few sentences, which is too short to vote on and
+short enough to chunk finely.
 
 ---
 

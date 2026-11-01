@@ -38,6 +38,9 @@ class Job:
     hotwords: str | None
     insert_mode: str
     rtl_auto: bool
+    # Dictation is chunked by sentence and lets each chunk pick its own
+    # language. A file is not: one language, voted over the whole of it.
+    dictation: bool = False
     state: str = "queued"
     progress: Progress = field(default_factory=Progress)
     meta: dict | None = None
@@ -91,12 +94,14 @@ class JobManager:
 
     # -------------------------------------------------------------- submitting
     def submit(self, path: str, *, language=None, timestamps=False, hotwords=None,
-               insert_mode="cursor", rtl_auto=True) -> Job:
+               insert_mode="cursor", rtl_auto=True,
+               dictation=False) -> Job:
         """Always accepted. Never blocked by a job that is running or unwinding
         after a cancel - that was the whole complaint."""
         job = Job(id=next(self._ids), path=str(path), language=language,
                   timestamps=timestamps, hotwords=hotwords,
-                  insert_mode=insert_mode, rtl_auto=rtl_auto)
+                  insert_mode=insert_mode, rtl_auto=rtl_auto,
+                  dictation=dictation)
         with self._lock:
             self.jobs.append(job)
             # Trim finished jobs only; never drop something still running.
@@ -220,6 +225,7 @@ class JobManager:
                     timestamps=job.timestamps,
                     hotwords=job.hotwords,
                     resume=True,
+                    dictation=job.dictation,
                     on_progress=on_progress,
                     cancel=job.cancel,
                 )

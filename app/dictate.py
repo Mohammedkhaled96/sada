@@ -223,6 +223,10 @@ class DictationController:
             hotwords=s.hotwords or None,
             insert_mode=s.insert_mode,
             rtl_auto=s.rtl_auto,
+            # Sentence-sized chunks, each free to be in its own language.
+            # A file picked from disk is not treated this way - see
+            # engine/job.py for why that distinction has to exist.
+            dictation=True,
         )
         # The window the user already knows from transcribing a file: name,
         # length, language, progress, time left, speed, model. It does not
