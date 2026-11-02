@@ -19,7 +19,7 @@
 #   winget install --manifest winget
 
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.1.0
+PackageVersion: 1.1.1
 
 # Inno Setup. Declaring the type lets winget apply the right silent switches and
 # find the uninstall entry without being told how.
@@ -59,14 +59,14 @@ ReleaseDate: 2026-11-02
 AppsAndFeaturesEntries:
   - DisplayName: Sada
     Publisher: Mohammed Khaled
-    DisplayVersion: 1.1.0
+    DisplayVersion: 1.1.1
     ProductCode: '{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}_is1'
     UpgradeCode: '{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}'
     InstallerType: inno
 
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.0/Sada-Setup-1.1.0.exe
+    InstallerUrl: https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.1/Sada-Setup-1.1.1.exe
     InstallerSha256: 0E9647937C0B7269002FC3D60CE65B3D124418B595C277E7A2238C70C9C878EB
 
 ManifestType: installer

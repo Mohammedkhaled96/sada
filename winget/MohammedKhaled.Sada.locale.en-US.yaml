@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.1.0
+PackageVersion: 1.1.1
 PackageLocale: en-US
 
 Publisher: Mohammed Khaled
@@ -101,7 +101,7 @@ ReleaseNotes: |-
   - Your corrections list from Settings is applied to dictation. It was written
     and documented and never actually ran
 
-ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.1.0
+ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.1.1
 
 Documentations:
   - DocumentLabel: User Guide
