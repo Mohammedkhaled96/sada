@@ -63,6 +63,10 @@ def ui_language_labels() -> list[str]:
 class Settings:
     # interface - English by default, Arabic is a setting
     ui_language: str = "en"
+    # The welcome screen at startup. On, because a program that starts with no
+    # window at all and only speaks one sentence is one the user has to take
+    # on trust; the window says the same thing and stays there to be read.
+    show_window_on_start: bool = True
 
     # engine
     model: str = "turbo"
@@ -83,6 +87,17 @@ class Settings:
     # hand after every dictation.
     dictation_corrections: str = ""
     dictation_device: str = ""              # empty means the system default
+    # Pause whatever is playing for the length of the recording. On by default
+    # because the microphone hears the music, and a line of a song in the
+    # middle of a dictated sentence is not something the user can predict or
+    # explain. Only what is already playing is paused, and only that is put
+    # back - see engine/mediapause.py.
+    dictation_pause_media: bool = True
+    # Keep the model in memory between dictations. Turning this off returns
+    # about three gigabytes after each one and pays the load time again on the
+    # next, which is a trade worth offering on a machine that needs the memory
+    # for something else.
+    dictation_keep_model: bool = True
 
     # shortcuts
     hotkey_transcribe: str = "Ctrl+Shift+T"

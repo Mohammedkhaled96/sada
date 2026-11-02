@@ -23,6 +23,12 @@ wxPython>=4.3.0
 # Word over COM, and the JAWS scripting API.
 pywin32>=306
 
+# Windows System Media Transport Controls, used to pause whatever is playing
+# for the length of a dictation - the microphone hears the music too. Optional:
+# app/mediapause.py reports itself unavailable without it and the setting is
+# greyed out, so an older install keeps working untouched.
+winsdk>=1.0.0b10
+
 # torch is pulled in by openai-whisper. On a CPU-only machine install the smaller
 # CPU wheel first to avoid downloading the CUDA build:
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu

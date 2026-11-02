@@ -294,6 +294,13 @@ class Recorder:
     def running(self) -> bool:
         return self._stream is not None
 
+    @property
+    def rate(self) -> int:
+        """The rate the device actually opened at, which is not always the one
+        asked for: WASAPI refuses anything but the device's native rate, so
+        this is resampled to 16 kHz on the way out."""
+        return self._rate
+
     # -- reading -----------------------------------------------------------
     def read(self, timeout: float = 0.1) -> np.ndarray:
         """Whatever has arrived since the last call, at 16 kHz."""
