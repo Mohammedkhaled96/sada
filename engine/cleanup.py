@@ -11,12 +11,15 @@ verbatim transcript back.
 
 So: repetition that is clearly the decoder stuttering, spacing and punctuation,
 and a list of replacements the user wrote themselves. Nothing that guesses.
+
+Spoken emoji used to be here too - say "heart emoji", get a heart. It was
+removed on the evidence of using it: every speaker names an emoji differently,
+a table can only hold the namings somebody thought of, and the failure is not a
+missing emoji but the words printed into the document instead.
 """
 from __future__ import annotations
 
 import re
-
-from engine import emoji
 
 # A word repeated this many times in a row was not said that many times. Twice
 # is left alone: "very very", "لا لا", "no no" are things people say.
@@ -73,12 +76,10 @@ def collapse_repeats(text: str) -> str:
 
 
 def tidy(text: str, language: str | None = None) -> str:
-    """Spacing, punctuation, repetition, and emoji the speaker asked for by
-    name. Never wording."""
+    """Spacing, punctuation and repetition. Never wording."""
     if not text:
         return text
     text = collapse_repeats(text)
-    text = emoji.apply(text)
     text = _SPACE_BEFORE_PUNCT.sub(r"\1", text)
     text = _SPACE_AFTER_OPEN.sub(r"\1", text)
     text = _SPACE_BEFORE_CLOSE.sub(r"\1", text)

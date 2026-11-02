@@ -9,10 +9,11 @@ So there are no patterns here. There is a list of sounds that are not words in
 either language, matched whole, and anything not on the list survives. Words
 that are fillers in speech but also carry meaning - "يعني", "like", "you know",
 "آه" - are deliberately absent: deciding whether this particular "يعني" meant
-something takes a language model, and §1 of docs/dictation-plan.md is about
-what happens when a language model is allowed to decide what you meant.
+something takes a language model, and docs/voice-typing.md is about what
+happens when a language model is allowed to decide what you meant.
 
-tests/test_fillers.py asserts the survivors, not just the removals.
+This runs on a dictation and never on a file, from engine/job.py's `polish`.
+tests/test_text.py asserts the survivors, not just the removals.
 """
 from __future__ import annotations
 

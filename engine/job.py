@@ -17,6 +17,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from engine import cleanup, fillers
 from engine.audio import SAMPLE_RATE, decode_audio
 from engine.chunking import SHORT_TARGET_S
 from engine.langdetect import detect_language
@@ -61,7 +62,7 @@ class Progress:
     and reporting "0.0x real time, less than a second remaining" on a long file
     is worse than admitting we do not know.
     """
-    state: str = "queued"            # queued|decoding|detecting|transcribing|writing|done|error|cancelled
+    state: str = "queued"            # queued|decoding|detecting|transcribing|polishing|writing|done|error|cancelled
     position: float = 0.0
     duration: float = 0.0
     language: str = ""
@@ -123,6 +124,41 @@ def _majority(languages: list[str]) -> str:
     return max(counts, key=lambda k: counts[k])
 
 
+def polish(segments: list[dict], corrections: str = "") -> list[dict]:
+    """What dictation adds to a transcript, and a picked file never gets.
+
+    Three passes, in this order and for a reason:
+
+    1. `tidy` - repetition the decoder produced rather than the speaker, and
+       spacing.
+    2. hesitation sounds, which are in a spoken sentence and not in a written
+       one. Whole words off a fixed list; nothing that carries meaning.
+    3. the replacements the user wrote themselves, last, so a correction wins
+       over everything above it.
+
+    A segment that was nothing but hesitation is dropped rather than left as an
+    empty line. Each segment is cleaned on its own because that is the unit the
+    language is known for - a correction list written for Arabic should not be
+    applied to the English sentence next to it.
+    """
+    pairs = cleanup.parse_corrections(corrections)
+    out: list[dict] = []
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        language = seg.get("language")
+        if fillers.is_all_filler(text, language):
+            continue
+        text = cleanup.tidy(text, language)
+        text = fillers.strip_fillers(text, language)
+        if pairs:
+            text = cleanup.apply_corrections(text, pairs)
+        if text:
+            out.append({**seg, "text": text})
+    return out
+
+
 def run_transcription(
     audio_path: str | Path,
     backend,
@@ -133,6 +169,7 @@ def run_transcription(
     hotwords: str | None = None,
     resume: bool = False,
     dictation: bool = False,
+    corrections: str = "",
     on_progress=None,
     cancel: threading.Event | None = None,
 ) -> dict:
@@ -170,25 +207,28 @@ def run_transcription(
     report(duration=duration)
 
     # -------------------------------------------------------------- language
-    # Transcribing a file: one language for the whole of it, detected by a
-    # vote over samples taken from several places. That is what this has
-    # always done and it stays that way.
+    # One language for the whole recording, detected by a vote over samples
+    # taken from several places - and the same for a dictation as for a file.
     #
-    # Dictating: nothing is forced. Each chunk is handed over with no language
-    # and decides its own, so a few sentences that move between Arabic,
-    # English and Spanish come back in three scripts.
+    # A dictation used to hand every chunk over with no language so each could
+    # choose its own, which let somebody move between Arabic, English and
+    # Spanish in one breath. It was removed on request, and the reasons it was
+    # removed are worth keeping written down:
     #
-    # The difference is not a preference. Letting every chunk of a FILE decide
-    # for itself ended an hour of Arabic with
-    # "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters, because
-    # one chunk near the end was heard as English. A vote cannot do that, and
-    # a file is long enough for a vote to be right.
+    # * it cost the detection on every chunk - 16.3 s against 5.6 s for the
+    #   same 5.5-second recording, measured, for byte-identical text;
+    # * the reading direction has no single answer when the chunks disagree,
+    #   so a mixed paragraph faced whichever way most of it did; and
+    # * a chunk heard as the wrong language is written in the wrong script,
+    #   which is the failure that ended an hour of Arabic with
+    #   "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters.
+    #
+    # A vote over the whole recording cannot do that, and it gives the one
+    # language that `is_rtl` below needs to face the paragraph correctly.
     check_cancel()
     spoken: list[str] = []
     if language:
         report(state="detecting", language=language, language_confidence=1.0)
-    elif dictation:
-        report(state="detecting", message="detecting the language")
     else:
         report(state="detecting", message="detecting the language")
         lang, conf, _votes = detect_language(backend, audio, log=lambda *a: None)
@@ -217,6 +257,9 @@ def run_transcription(
 
     opts = dict(DECODE_OPTS)
     if dictation:
+        # Sentence-sized chunks, so each one fits a short encoder window. A
+        # file keeps the 90-second default: it is long enough that the window
+        # saving does not pay for the extra calls.
         opts["chunk_target_s"] = SHORT_TARGET_S
     if resume_from > 0:
         opts["clip_timestamps"] = [resume_from, duration]
@@ -262,6 +305,16 @@ def run_transcription(
     wall = time.time() - t0
 
     # ---------------------------------------------------------------- output
+    # Dictation is text going straight into somebody's sentence, so it gets the
+    # polish a picked file does not: hesitation sounds out, the user's own
+    # replacements applied. A file is left exactly as the model wrote it,
+    # which is what transcribing a file has always done.
+    if dictation:
+        # Its own state, not a sub-phase of writing, so the window names what
+        # is happening instead of saying "writing the text" for both.
+        report(state="polishing", message="tidying the text")
+        segments = polish(segments, corrections)
+
     paragraphs = build_paragraphs(segments)
 
     report(state="writing", message="writing the transcript")

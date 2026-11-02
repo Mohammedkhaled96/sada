@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.i18n import t
+from engine import applog
 from engine.job import Cancelled, Progress, run_transcription
 
 # queued -> running -> done | cancelled | error
@@ -41,6 +42,11 @@ class Job:
     # Dictation is chunked by sentence and lets each chunk pick its own
     # language. A file is not: one language, voted over the whole of it.
     dictation: bool = False
+    # The replacements the user wrote, applied to a dictation only.
+    corrections: str = ""
+    # The window that was in front when a dictation started, which is where
+    # its text belongs however long the transcription takes.
+    target_hwnd: int = 0
     state: str = "queued"
     progress: Progress = field(default_factory=Progress)
     meta: dict | None = None
@@ -95,13 +101,14 @@ class JobManager:
     # -------------------------------------------------------------- submitting
     def submit(self, path: str, *, language=None, timestamps=False, hotwords=None,
                insert_mode="cursor", rtl_auto=True,
-               dictation=False) -> Job:
+               dictation=False, corrections="", target_hwnd=0) -> Job:
         """Always accepted. Never blocked by a job that is running or unwinding
         after a cancel - that was the whole complaint."""
         job = Job(id=next(self._ids), path=str(path), language=language,
                   timestamps=timestamps, hotwords=hotwords,
                   insert_mode=insert_mode, rtl_auto=rtl_auto,
-                  dictation=dictation)
+                  dictation=dictation, corrections=corrections,
+                  target_hwnd=target_hwnd)
         with self._lock:
             self.jobs.append(job)
             # Trim finished jobs only; never drop something still running.
@@ -203,6 +210,7 @@ class JobManager:
             if backend is None:
                 job.state = "error"
                 job.error = t("job_no_model")
+                applog.write(f"job {job.id}: no model is loaded", where="job")
                 job.finished = time.time()
                 self._changed(job)
                 self._finished(job)
@@ -226,6 +234,7 @@ class JobManager:
                     hotwords=job.hotwords,
                     resume=True,
                     dictation=job.dictation,
+                    corrections=job.corrections,
                     on_progress=on_progress,
                     cancel=job.cancel,
                 )
@@ -235,9 +244,13 @@ class JobManager:
             except FileNotFoundError:
                 job.state = "error"
                 job.error = t("file_not_found")
+                applog.write(f"job {job.id}: {job.path} is gone", where="job")
             except Exception as exc:
                 job.state = "error"
                 job.error = f"{type(exc).__name__}: {exc}"
+                # Until this line a failed transcription left no trace at all
+                # beyond one sentence spoken to the user and then forgotten.
+                applog.failed(f"job {job.id} ({job.filename})", exc, where="job")
             finally:
                 job.finished = time.time()
                 self.current_id = None
