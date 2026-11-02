@@ -24,6 +24,7 @@ import time
 import wx
 
 from app import config, i18n
+from app import autostart, mediapause
 from engine import models
 from app.config import (DEVICES, INSERT_MODES, LANGUAGES, MODELS, UI_LANGUAGES,
                         Settings, device_labels, format_hotkey, insert_labels,
@@ -59,6 +60,37 @@ class _NamedAccessible(wx.Accessible):
 
     def GetName(self, childId):
         return (wx.ACC_OK, self._name)
+
+
+def _wrap_to(control, text: str, width: int) -> str:
+    """Break `text` into lines that fit `width` pixels in `control`'s font.
+
+    `wx.StaticText.Wrap()` is the obvious way to do this and it was the first
+    thing tried. On a freshly created control it works; on the one in the
+    welcome area - same style, same font - it returned the text unchanged
+    every time, leaving a 169-character sentence on one 986-pixel line inside
+    a 712-pixel window. Measuring here instead is a dozen lines, is the same
+    measurement wx would make, and can be checked.
+
+    Arabic and English both break on spaces, which is all this needs; a word
+    longer than the whole width is left to overflow rather than cut, because
+    a cut word is harder to read than a wide one.
+    """
+    if width <= 0 or not text:
+        return text
+    dc = wx.ClientDC(control)
+    dc.SetFont(control.GetFont())
+    lines, current = [], ""
+    for word in text.split():
+        candidate = f"{current} {word}" if current else word
+        if current and dc.GetTextExtent(candidate).width > width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return "\n".join(lines)
 
 
 def _set_accessible_name(control, name: str) -> None:
@@ -141,6 +173,20 @@ class SettingsDialog(wx.Dialog):
         _row(g0, ui.GetStaticBox(), t("field_ui_language"), self.ui_language,
              t("help_ui_language"))
         ui.Add(g0, 0, wx.EXPAND | wx.ALL, PAD)
+        # Read from the Startup folder rather than from settings.json, so a
+        # shortcut the user deleted by hand is reflected here instead of being
+        # silently put back.
+        self.show_on_start = wx.CheckBox(ui.GetStaticBox(),
+                                         label=t("field_show_on_start"))
+        self.show_on_start.SetValue(settings.show_window_on_start)
+        ui.Add(self.show_on_start, 0, wx.LEFT | wx.RIGHT | wx.TOP, PAD)
+        _hint(ui, ui.GetStaticBox(), t("help_show_on_start"))
+
+        self.autostart = wx.CheckBox(ui.GetStaticBox(), label=t("field_autostart"))
+        self.autostart.SetValue(autostart.enabled())
+        self.autostart.Enable(autostart.available())
+        ui.Add(self.autostart, 0, wx.LEFT | wx.RIGHT | wx.TOP, PAD)
+        _hint(ui, ui.GetStaticBox(), t("help_autostart"))
         outer.Add(ui, 0, wx.EXPAND | wx.ALL, PAD)
 
         # ---------------------------------------------------------- engine
@@ -211,6 +257,17 @@ class SettingsDialog(wx.Dialog):
         _row(g4, dicbox, t("field_corrections"), self.corrections,
              t("help_corrections"))
         dic.Add(g4, 0, wx.EXPAND | wx.ALL, PAD)
+
+        self.pause_media = wx.CheckBox(dicbox, label=t("field_pause_media"))
+        self.pause_media.SetValue(settings.dictation_pause_media)
+        self.pause_media.Enable(mediapause.available())
+        dic.Add(self.pause_media, 0, wx.LEFT | wx.RIGHT | wx.TOP, PAD)
+        _hint(dic, dicbox, t("help_pause_media"))
+
+        self.keep_model = wx.CheckBox(dicbox, label=t("field_keep_model"))
+        self.keep_model.SetValue(settings.dictation_keep_model)
+        dic.Add(self.keep_model, 0, wx.LEFT | wx.RIGHT | wx.TOP, PAD)
+        _hint(dic, dicbox, t("help_keep_model"))
 
         self.btn_check = wx.Button(dicbox, label=t("btn_dictation_check"))
         self.btn_check.Bind(wx.EVT_BUTTON, self.on_dictation_check)
@@ -374,6 +431,12 @@ class SettingsDialog(wx.Dialog):
         s.dictation_corrections = self.corrections.GetValue().strip()
         s.dictation_device = ("" if self.mic.GetSelection() <= 0
                               else self._mic_names[self.mic.GetSelection()])
+        s.show_window_on_start = self.show_on_start.GetValue()
+        # The shortcut is the state, so it is written here and not stored as
+        # a setting that could disagree with the folder.
+        autostart.apply(self.autostart.GetValue())
+        s.dictation_pause_media = self.pause_media.GetValue()
+        s.dictation_keep_model = self.keep_model.GetValue()
         for name, ctrl in keys.items():
             setattr(s, name, format_hotkey(ctrl.GetValue()))
         s.speak = self.speak.GetValue()
@@ -649,6 +712,11 @@ class SettingsDialog(wx.Dialog):
         self.k_dictate.SetValue(d.hotkey_dictate)
         self.mic.SetSelection(0)
         self.corrections.SetValue(d.dictation_corrections)
+        self.show_on_start.SetValue(d.show_window_on_start)
+        # Defaults do not reach into the Startup folder: removing something
+        # the user put there is not a default, it is an action.
+        self.pause_media.SetValue(d.dictation_pause_media)
+        self.keep_model.SetValue(d.dictation_keep_model)
         self.speak.SetValue(d.speak)
         self.progress_every.SetValue(d.speak_progress_every)
         self.sapi.SetValue(d.speak_via_sapi)
@@ -808,12 +876,52 @@ class MainWindow(wx.Frame):
     """
 
     def __init__(self, app_frame):
+        # Maximisable now. It was not, and a window the user cannot resize the
+        # ordinary way is one more thing behaving differently from every other
+        # window on their machine.
         super().__init__(None, title=t("window_title"),
-                         style=wx.DEFAULT_FRAME_STYLE & ~wx.MAXIMIZE_BOX)
+                         style=wx.DEFAULT_FRAME_STYLE)
         apply_direction(self)
         self.app_frame = app_frame
-        panel = wx.Panel(self)
+        # Scrolling, because the contents are taller than some screens are.
+        # Measured on a 1280x672 desktop: the window needs 816 pixels and the
+        # screen has 672, and without a scroller the sizer takes the shortfall
+        # out of the only growable thing in the window - the jobs list, which
+        # collapsed to nothing. Tab moves focus and the scroller follows it, so
+        # nothing here becomes unreachable from the keyboard.
+        panel = wx.ScrolledWindow(self, style=wx.TAB_TRAVERSAL | wx.VSCROLL)
+        panel.SetScrollRate(0, 20)
         outer = wx.BoxSizer(wx.VERTICAL)
+
+        # ---------------------------------------------------------- welcome
+        # A heading, in the window's own font at a larger size rather than a
+        # named family: a font this machine does not have is substituted for
+        # one nobody chose, and the Arabic would be the first to suffer.
+        self.welcome = wx.StaticText(panel, label=t("welcome_title"))
+        heading = self.welcome.GetFont()
+        heading.SetPointSize(heading.GetPointSize() + 7)
+        heading.SetWeight(wx.FONTWEIGHT_BOLD)
+        self.welcome.SetFont(heading)
+        outer.Add(self.welcome, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP,
+                  PAD * 2)
+
+        # ST_NO_AUTORESIZE and a re-wrap on every size change, rather than a
+        # single Wrap() at build time. Wrap() inserts line breaks into the
+        # label, and SetLabel() takes them out again - so the second call to
+        # refresh_labels() left this one line 986 pixels wide in a 712-pixel
+        # window, with the end of the sentence off the edge. Re-wrapping to
+        # the width the control actually has also means it follows the window
+        # when the user resizes it, which it could not do before.
+        self.welcome_sub = wx.StaticText(panel, label="",
+                                         style=wx.ST_NO_AUTORESIZE)
+        sub = self.welcome_sub.GetFont()
+        sub.SetPointSize(sub.GetPointSize() + 1)
+        self.welcome_sub.SetFont(sub)
+        self._welcome_sub_text = ""
+        self._wrapped_at = 0
+        outer.Add(self.welcome_sub, 0,
+                  wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, PAD * 2)
+        panel.Bind(wx.EVT_SIZE, self.on_panel_resize)
 
         box = wx.StaticBoxSizer(wx.VERTICAL, panel, t("group_status"))
         self.status = wx.TextCtrl(box.GetStaticBox(), value=t("preparing"),
@@ -876,23 +984,98 @@ class MainWindow(wx.Frame):
         outer.Add(acts, 0, wx.EXPAND | wx.ALL, PAD)
 
         hide = wx.Button(panel, wx.ID_CANCEL, t("btn_hide"))
-        hide.Bind(wx.EVT_BUTTON, lambda e: self.Hide())
+        hide.Bind(wx.EVT_BUTTON, lambda e: self.dismiss())
         outer.Add(hide, 0, wx.EXPAND | wx.ALL, PAD)
 
         panel.SetSizer(outer)
+        # Labels first, then lay out, then take the size: refresh_labels()
+        # wraps the welcome paragraph, which changes its height, and a size
+        # measured before that is a size for a window that no longer exists.
         self.refresh_labels()
-        outer.SetSizeHints(self)
+        panel.Layout()
+        panel.FitInside()
+        wanted = outer.CalcMin()
+        usable = wx.Display().GetClientArea()
+        self.SetMinSize((660, 420))
+        self.SetClientSize((max(wanted.width, 660),
+                            min(wanted.height, usable.height - 60)))
         self.CentreOnScreen()
 
-        self.Bind(wx.EVT_CLOSE, lambda e: self.Hide())
+        # Alt+F4 and the title bar's close button.
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.Bind(wx.EVT_MENU, lambda e: self.app_frame.open_help(), id=wx.ID_HELP)
         self.SetAcceleratorTable(wx.AcceleratorTable([
             wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_F1, wx.ID_HELP),
-            wx.AcceleratorEntry(wx.ACCEL_NORMAL, wx.WXK_ESCAPE, wx.ID_CANCEL),
         ]))
-        self.Bind(wx.EVT_MENU, lambda e: self.app_frame.open_help(), id=wx.ID_HELP)
-        self.Bind(wx.EVT_MENU, lambda e: self.Hide(), id=wx.ID_CANCEL)
+
+        # Escape, Ctrl+F4 and Ctrl+W, through CHAR_HOOK rather than an
+        # accelerator table. The accelerator was there and did not work: the
+        # multiline status box takes focus when the window opens and swallows
+        # Escape before the frame ever sees it, so the window could only be
+        # closed with the mouse. CHAR_HOOK fires on the frame first, whatever
+        # has focus.
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_char_hook)
 
         self.buttons["transcribe"].SetDefault()
+
+    def on_panel_resize(self, event) -> None:
+        self.wrap_welcome()
+        event.Skip()
+
+    def wrap_welcome(self) -> None:
+        """Re-break the welcome paragraph to the width it now has.
+
+        Skipped when the width has not changed, because wrapping resizes the
+        control, which raises another size event: without the guard this is a
+        loop rather than a layout.
+        """
+        panel = self.welcome_sub.GetParent()
+        # Measured from the panel, not from the control: with ST_NO_AUTORESIZE
+        # the control's own width is whatever the sizer last gave it, which
+        # does not shrink when the window does, so wrapping to it left the
+        # paragraph on one 986-pixel line inside a 680-pixel window.
+        width = panel.GetClientSize().width - 4 * PAD
+        if width < 120 or width == self._wrapped_at:
+            return
+        self._wrapped_at = width
+        wrapped = _wrap_to(self.welcome_sub, self._welcome_sub_text, width)
+        self.welcome_sub.SetLabel(wrapped)
+        # The height is counted rather than asked for. With ST_NO_AUTORESIZE,
+        # GetBestSize() reports one line however many the label has, so the
+        # control stayed 18 pixels tall and the second line of the welcome was
+        # cut off below the edge of it.
+        line_height = self.welcome_sub.GetTextExtent("Ag").height
+        self.welcome_sub.SetMinSize(
+            (-1, line_height * (wrapped.count("\n") + 1) + PAD // 2))
+        if panel.GetSizer():
+            panel.Layout()
+
+    # ------------------------------------------------------------- closing
+    def on_char_hook(self, event) -> None:
+        key = event.GetKeyCode()
+        ctrl = event.ControlDown()
+        if key == wx.WXK_ESCAPE or (ctrl and key in (wx.WXK_F4, ord("W"))):
+            self.dismiss()
+            return
+        event.Skip()
+
+    def on_close(self, event) -> None:
+        """Closing hides; it never quits. The program lives in the tray, and a
+        user who meant to quit has a button and a tray item that say so."""
+        if event.CanVeto():
+            event.Veto()
+        self.dismiss()
+
+    def dismiss(self) -> None:
+        """Put the window away, and remember that the user asked for that.
+
+        The remembering is the point. Every job used to call
+        `show_without_focus()`, so a window the user had just closed came
+        straight back with the next dictation and looked like one that could
+        not be closed at all. Now it stays away until they ask for it.
+        """
+        self.app_frame.window_dismissed = True
+        self.Hide()
 
     def on_about(self) -> None:
         dlg = wx.Dialog(self, title=t("about_title"),
@@ -924,6 +1107,10 @@ class MainWindow(wx.Frame):
         change in the settings."""
         s = self.app_frame.settings
         self.SetTitle(t("window_title"))
+        self.welcome.SetLabel(t("welcome_title"))
+        self._welcome_sub_text = t("welcome_sub")
+        self._wrapped_at = 0            # force a re-wrap at the current width
+        self.wrap_welcome()
         for key, string, hotkey in (
             ("transcribe", "btn_transcribe", s.hotkey_transcribe),
             ("dictate", "btn_dictate", s.hotkey_dictate),
@@ -939,6 +1126,21 @@ class MainWindow(wx.Frame):
 
     def set_status(self, text: str) -> None:
         self.status.SetValue(text)
+
+    def select_job(self, job_id: int) -> None:
+        """Put one job in view and on the keyboard, for the tray's jobs menu.
+
+        Focus goes to the list rather than the default button, because the
+        user asked for a job and the next thing they will want to do is read
+        it or cancel it.
+        """
+        for i in range(self.jobs_list.GetItemCount()):
+            if self.jobs_list.GetItemData(i) == job_id:
+                self.jobs_list.Select(i)
+                self.jobs_list.Focus(i)
+                self.jobs_list.EnsureVisible(i)
+                self.jobs_list.SetFocus()
+                return
 
     def selected_job_id(self) -> int | None:
         i = self.jobs_list.GetFirstSelected()
@@ -973,14 +1175,38 @@ class MainWindow(wx.Frame):
 
     def show_without_focus(self) -> None:
         """Make the window visible when work starts, without taking focus - the
-        user did not ask to go there, and moving focus would lose their place."""
-        if not self.IsShown():
-            self.Show()
+        user did not ask to go there, and moving focus would lose their place.
+
+        Does nothing at all once the user has closed the window: see
+        `dismiss()`. The tray icon and the spoken status still report, so
+        nothing is lost by respecting that.
+
+        Shown through SW_SHOWNA rather than wx's Show(), because showing a
+        top-level window the ordinary way activates it. That matters more than
+        it looks: a dictation started in Teams is written when the
+        transcription finishes, and if this window took the foreground in the
+        meantime the text would be aimed at Sada instead. The window the
+        dictation came from is remembered as well - see app/dictate.py - so
+        this is the first of two defences rather than the only one.
+        """
+        if self.IsShown() or self.app_frame.window_dismissed:
+            return
+        try:
+            import ctypes
+
+            SW_SHOWNA = 8               # show, do not activate
+            ctypes.windll.user32.ShowWindow(self.GetHandle(), SW_SHOWNA)
+        except Exception:
+            self.Show()                 # visible and focused beats invisible
 
     def show_and_focus(self) -> None:
         """Called from a hotkey, so it must come to the front and take focus -
         the user asked for it. That is the opposite of the progress window,
-        which must never steal focus."""
+        which must never steal focus.
+
+        Asking for the window is also how the user takes back a dismissal, so
+        from here on it reappears with new work again."""
+        self.app_frame.window_dismissed = False
         self.Show()
         self.Iconize(False)
         self.Raise()

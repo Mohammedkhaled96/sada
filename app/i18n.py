@@ -107,6 +107,20 @@ S: dict[str, tuple[str, str]] = {
     "group_shortcuts": ("Keyboard shortcuts", "اختصارات لوحة المفاتيح"),
     "group_reader": ("Screen reader", "قارئ الشاشة"),
     "group_interface": ("Interface", "الواجهة"),
+    "field_show_on_start": ("Show the program window when Sada starts",
+                            "إظهار نافذة البرنامج عند تشغيل صدى"),
+    "help_show_on_start": ("The welcome screen, with every command and its "
+                           "shortcut. Turn it off to start straight into the "
+                           "notification area.",
+                           "شاشة الترحيب، وفيها كل أمر واختصاره. ألغِ الخيار "
+                           "ليبدأ البرنامج في منطقة الإشعارات مباشرة."),
+    "field_autostart": ("Start Sada when Windows starts",
+                        "تشغيل صدى مع بدء الويندوز"),
+    "help_autostart": ("A shortcut in your Startup folder, which you can see "
+                       "and delete yourself: Windows key with R, then type "
+                       "shell:startup.",
+                       "اختصار في مجلد بدء التشغيل، يمكنك رؤيته وحذفه بنفسك: "
+                       "زر ويندوز مع R، ثم اكتب shell:startup."),
 
     "field_ui_language": ("Interface language:", "لغة الواجهة:"),
     "help_ui_language": ("Changes the language of the windows and the spoken "
@@ -165,8 +179,10 @@ S: dict[str, tuple[str, str]] = {
                             "باختصارها."),
     "check_sapi": ("Use the Windows voice if no screen reader is found",
                    "استخدام صوت ويندوز إذا لم يُعثر على قارئ شاشة"),
-    "check_only_word": ("Shortcuts work only while Word is in front",
-                        "تعمل الاختصارات فقط عندما يكون وورد في المقدمة"),
+    "check_only_word": ("Shortcuts work only while Word is in front "
+                        "(dictation always works everywhere)",
+                        "تعمل الاختصارات فقط عندما يكون وورد في المقدمة "
+                        "(الإملاء يعمل في كل مكان دائمًا)"),
     "detected_reader": ("Screen reader detected: {name}",
                         "قارئ الشاشة المكتشف حاليًا: {name}"),
 
@@ -278,6 +294,19 @@ S: dict[str, tuple[str, str]] = {
     "group_status": ("Status", "الحالة"),
     "group_actions": ("Commands", "الأوامر"),
     "status_name": ("Program status", "حالة البرنامج"),
+    "welcome_title": ("Welcome to Sada", "أهلًا بك في صدى"),
+    "welcome_sub": ("Transcribe a recording, or speak and have it written. "
+                    "Everything below has a shortcut, and the program keeps "
+                    "running in the notification area when this window is "
+                    "closed.",
+                    "فرّغ تسجيلًا، أو تكلّم فيُكتب كلامك. لكل أمر بالأسفل "
+                    "اختصار، والبرنامج يظل يعمل في منطقة الإشعارات بعد إغلاق "
+                    "هذه النافذة."),
+    "btn_transcribe_plain": ("Start transcribing", "بدء التفريغ"),
+    "tray_jobs": ("Jobs", "الأعمال"),
+    "tray_no_jobs": ("Nothing yet", "لا يوجد شيء بعد"),
+    "tray_more_jobs": ("{n} more in the program window",
+                       "و{n} غيرها في نافذة البرنامج"),
     "btn_transcribe": ("&Start transcribing   ({key})", "&بدء التفريغ   ({key})"),
     "btn_dictate": ("&Dictate, start and stop   ({key})",
                     "الإ&ملاء، بدء وإيقاف   ({key})"),
@@ -304,6 +333,7 @@ S: dict[str, tuple[str, str]] = {
     "state_decoding": ("Reading the audio file", "جارٍ قراءة الملف الصوتي"),
     "state_detecting": ("Detecting the language", "جارٍ كشف اللغة"),
     "state_transcribing": ("Transcribing", "جارٍ التفريغ"),
+    "state_polishing": ("Tidying the text", "جارٍ تنقيح النص"),
     "state_writing": ("Writing the text", "جارٍ كتابة النص"),
     "state_done": ("Finished", "انتهى"),
     "state_error": ("Something went wrong", "حدث خطأ"),
@@ -328,6 +358,22 @@ S: dict[str, tuple[str, str]] = {
     "tray_working": ("Transcribing", "جارٍ التفريغ"),
     "tray_loading": ("Loading the model", "جارٍ تحميل النموذج"),
     "tray_load_failed": ("The model failed to load", "فشل تحميل النموذج"),
+    "tray_unloaded": ("The model is not in memory",
+                      "النموذج غير محمَّل في الذاكرة"),
+    "tray_dictate": ("Dictate", "إملاء"),
+    "tray_free_memory": ("Free the memory", "تحرير الذاكرة"),
+    "tray_load_model": ("Load the model", "تحميل النموذج"),
+    "say_model_freed": ("The model is out of memory. The next dictation loads "
+                        "it again.",
+                        "تم تحرير النموذج من الذاكرة، وسيُحمَّل من جديد مع "
+                        "الإملاء القادم."),
+    "say_unload_busy": ("Something is still using the model. Try again when it "
+                        "has finished.",
+                        "ما زال هناك عمل يستخدم النموذج. حاول بعد أن ينتهي."),
+    "say_loading_then_dictate": ("Loading the model, then I will start "
+                                 "recording by myself.",
+                                 "جارٍ تحميل النموذج، وسأبدأ التسجيل وحدي بعد "
+                                 "أن ينتهي."),
     "tray_window": ("Program window", "نافذة البرنامج"),
     "tray_settings": ("Settings", "الإعدادات"),
     "tray_help": ("Help", "المساعدة"),
@@ -358,9 +404,20 @@ S: dict[str, tuple[str, str]] = {
                     "جارٍ تفريغ {name}. {pct} بالمئة. اللغة {lang}. "
                     "الوقت المتوقع للانتهاء {eta}."),
     "say_done": ("Transcription finished. {words} words, language {lang}. The text "
-                 "was inserted into {doc}, and the cursor is at the start of it.",
+                 "was inserted into {doc}, and the cursor is at the end of it.",
                  "انتهى التفريغ. {words} كلمة، اللغة {lang}. "
-                 "أُدرج النص في المستند {doc}، ومؤشر الكتابة في أول النص."),
+                 "أُدرج النص في المستند {doc}، ومؤشر الكتابة في آخر النص."),
+    "say_done_elsewhere": ("Written into {app}. {words} words, language {lang}.",
+                           "تمت الكتابة في {app}. {words} كلمة، اللغة {lang}."),
+    "insert_refused_password": (
+        "That looks like a password box, so nothing was written. Put the "
+        "cursor in an ordinary text field and dictate again.",
+        "يبدو أن المؤشر في مربع كلمة مرور، فلم تُكتب أي كلمة. ضع المؤشر في "
+        "مربع كتابة عادي وأعد الإملاء."),
+    "insert_failed_elsewhere": (
+        "{app} did not accept the text. The words are still in the "
+        "transcript file.",
+        "لم يقبل {app} النص. الكلمات ما زالت موجودة في ملف التفريغ."),
     "say_cancelled": ("Transcription cancelled. The work done so far is saved.",
                       "أُلغي التفريغ. ما تم إنجازه محفوظ."),
     "say_word_not_in_front": (
@@ -406,6 +463,20 @@ S: dict[str, tuple[str, str]] = {
                          "exactly as written, whole words only.",
                          "واحد في كل سطر، الخطأ = الصواب. يُطبَّق على الإملاء "
                          "كما كتبته تمامًا، وعلى الكلمات الكاملة فقط."),
+    "field_pause_media": ("Pause what is playing while I dictate",
+                          "أوقف ما يُشغَّل أثناء الإملاء"),
+    "help_pause_media": ("The microphone hears the music too. Only what is "
+                         "already playing is paused, and only that is "
+                         "resumed afterwards.",
+                         "الميكروفون يسمع الموسيقى أيضًا. يتوقف فقط ما كان "
+                         "يُشغَّل بالفعل، ويُستأنف هو وحده بعد الانتهاء."),
+    "field_keep_model": ("Keep the model in memory between dictations",
+                         "أبقِ النموذج في الذاكرة بين الإملاءات"),
+    "help_keep_model": ("Turning this off returns about three gigabytes after "
+                        "each dictation, and the next one waits for the model "
+                        "to load again.",
+                        "إلغاء هذا الخيار يحرّر نحو ثلاثة جيجابايت بعد كل "
+                        "إملاء، وينتظر الإملاء التالي تحميل النموذج من جديد."),
     "mic_default": ("System default", "الافتراضي في النظام"),
     "btn_dictation_check": ("Check dictation", "فحص الإملاء"),
     "help_dictation_check": ("Records three seconds, measures it, and writes "
@@ -490,6 +561,13 @@ S: dict[str, tuple[str, str]] = {
                        "already owns it. Choose a different shortcut.",
                        "رفض ويندوز الاختصار {key}، أي أن برنامجًا آخر يملكه. "
                        "اختر اختصارًا مختلفًا."),
+    "chk_polish": ("The text after tidying", "النص بعد التنقيح"),
+    "chk_polish_fix": ("The tidying stage returned nothing. Your corrections "
+                       "list and hesitation removal are the parts that would "
+                       "be missing.",
+                       "مرحلة التنقيح لم تُرجع شيئًا. المتأثر هو قائمة "
+                       "تصحيحاتك وحذف أصوات التردد."),
+    "chk_log": ("The log file", "ملف السجل"),
     "chk_word": ("Word is open", "الوورد مفتوح"),
     "chk_word_fix": ("Open Microsoft Word with a document. Dictation writes "
                      "at the cursor there.",
@@ -509,12 +587,17 @@ S: dict[str, tuple[str, str]] = {
     "say_model_switch_later": ("The new model will be used after the current job "
                               "finishes.",
                               "سيُطبَّق النموذج الجديد بعد انتهاء العمل الجاري."),
-    "say_welcome": ("{app} is running. Press {k_start} to start transcribing, "
-                    "{k_window} for the program window, {k_settings} for settings, "
-                    "and {k_status} to hear the status.",
-                    "{app} يعمل الآن. اضغط {k_start} لبدء التفريغ، "
-                    "و{k_window} لفتح نافذة البرنامج، و{k_settings} للإعدادات، "
-                    "و{k_status} لقراءة الحالة."),
+    # Dictation was missing from this entirely - the shortcut for the feature
+    # the program is most used for was the one it never mentioned. The list is
+    # also shorter now: two actions and where to find the rest. A welcome that
+    # recites five shortcuts is one the user waits out rather than listens to,
+    # and the window it points at names every one of them.
+    "say_welcome": ("Welcome to {app}. Press {k_start} to transcribe a "
+                    "recording, or {k_dictate} to dictate. {k_window} opens "
+                    "the program window, where every command is listed.",
+                    "أهلًا بك في {app}. اضغط {k_start} لتفريغ تسجيل، "
+                    "أو {k_dictate} للإملاء. و{k_window} يفتح نافذة البرنامج "
+                    "وفيها كل الأوامر."),
 
 
     "hotkeys_failed": ("These shortcuts could not be registered, which usually "
@@ -589,16 +672,19 @@ All shortcuts can be changed in Settings.
 Dictation
 Press the dictation shortcut once and the program says "start typing". Speak
 normally. Press the same shortcut again and what you said is written at the
-cursor. The work happens while you are still speaking, so the wait after you
-press stop is only for the last phrase - about a second or two.
+cursor. The program window then shows the same progress a file transcription
+shows: how far it has got, the time remaining, the speed and the model.
 A tone marks each change as well as the spoken word, because a tone arrives
 immediately and speech waits for the screen reader to be free.
-Say the name of an emoji followed by the word emoji - "smile face emoji",
-"thumbs up emoji", "ايموجي قلب" - and the emoji is written instead of the
-words. The word emoji has to be there, so a sentence about your heart keeps
-the word heart.
-Say a number before the name and you get that many: "put 3 smile face emoji"
-writes three of them, in English or Arabic, up to ten.
+It writes into any text field in any application - Word, Notepad, a browser,
+a message box in Teams or WhatsApp. Whatever has the cursor when the
+transcription finishes is where the words go. Word gets one undo step for the
+whole insertion and the right reading direction; everywhere else the text is
+pasted, and your own clipboard is put back straight afterwards.
+A password box is refused out loud rather than filled.
+Speak one language per dictation. The language is detected over the whole
+recording, and the reading direction follows it - Arabic from the right,
+English and other Latin scripts from the left, exactly as for a file.
 On its own it does not rewrite what you said. Hesitation sounds are removed and
 a word the model repeated three times is collapsed, but a sentence you
 corrected yourself is written the way you said it.
@@ -675,11 +761,14 @@ carries on from where it stopped.
 المتبقّي، والسرعة، واسم النموذج.
 مع كل تغيّر في الحالة نغمة قصيرة إلى جانب الكلام المنطوق، لأن النغمة تصل
 فورًا بينما الكلام ينتظر فراغ قارئ الشاشة.
-قول اسم الإيموجي ومعاه كلمة «ايموجي» — «ايموجي قلب»، «ايموجي ابتسامة»،
-«thumbs up emoji» — فيتكتب الإيموجي نفسه بدل الكلام. ولازم كلمة «ايموجي»
-تكون موجودة، فجملة فيها كلمة «قلبي» بتفضل زي ما هي.
-وقول رقم قبل الاسم فيكتب لك العدد ده: «حط ٣ ايموجي قلب» تكتب تلات قلوب،
-بالعربي أو بالإنجليزي، لحد عشرة.
+والإملاء يكتب في أي مربع كتابة في أي تطبيق — وورد، المفكرة، المتصفح، مربع
+الرسائل في تيمز أو واتساب. المكان اللي فيه مؤشر الكتابة وقت انتهاء التفريغ هو
+اللي يستقبل الكلام. وورد ياخد تراجعًا واحدًا للإدراج كله مع اتجاه القراءة
+الصحيح، وفي باقي التطبيقات يُلزق النص ثم تُعاد الحافظة بتاعتك فورًا.
+ومربع كلمة المرور يُرفض بصوت مسموع ولا يُكتب فيه.
+وتكلّم بلغة واحدة في الإملاء الواحد. اللغة تُكتشف على التسجيل كله، واتجاه
+القراءة يتبعها — العربي من اليمين، والإنجليزي وباقي الحروف اللاتينية من
+اليسار، تمامًا كما في تفريغ الملفات.
 ولوحده مابيعيدش صياغة كلامك. بيشيل أصوات التردد ويجمع الكلمة اللي كرّرها
 النموذج ثلاث مرات، لكن الجملة اللي صحّحتها بنفسك بتتكتب زي ما قلتها.
 ولو في اسم بيطلع غلط كل مرة، حطّه في الإعدادات تحت «تصحيحات دائمة»، واحد في
