@@ -293,11 +293,19 @@ check("never in the middle of a job",
 check("and the full trim only when no model is loaded",
       "memory.release(trim=self.backend is None)" in main_source)
 
+# Imported on any platform, which is the point: this file runs on a Linux
+# runner, and the module is all Windows below the collect. It used to import
+# ctypes.wintypes at the top, which does not exist there.
 from app import memory                                              # noqa: E402
 
-check("the memory query returns a real number",
-      memory.working_set_mb() > 1.0, f"{memory.working_set_mb():.0f} MB")
-check("and releasing never raises", isinstance(memory.release(trim=False), float))
+check("releasing never raises, on any platform",
+      isinstance(memory.release(trim=False), float))
+if memory.WINDOWS:
+    check("and the memory query returns a real number",
+          memory.working_set_mb() > 1.0, f"{memory.working_set_mb():.0f} MB")
+else:
+    check("and reports 'unknown' rather than crashing off Windows",
+          memory.working_set_mb() == 0.0)
 
 
 print("\n--- the log ---")

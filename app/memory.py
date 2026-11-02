@@ -25,22 +25,32 @@ from __future__ import annotations
 
 import ctypes
 import gc
-from ctypes import wintypes
+import sys
 
 from engine import applog
 
+# Everything below the collect is Windows, and this module has to import on
+# Linux anyway: the container build runs there, and so does CI, which imports
+# the text pipeline to test it. `ctypes.wintypes` does not exist off Windows -
+# importing it raises - so the whole Windows half is built only when there is
+# a Windows to build it for. Elsewhere `release()` collects and reports
+# nothing, which is the honest answer rather than a crash.
+WINDOWS = sys.platform == "win32"
 
-class _MemoryCounters(ctypes.Structure):
-    _fields_ = [("cb", wintypes.DWORD),
-                ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t)]
+if WINDOWS:
+    from ctypes import wintypes
+
+    class _MemoryCounters(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t)]
 
 
 def _declare():
@@ -65,13 +75,17 @@ def _declare():
 
 
 try:
-    _K32, _PSAPI = _declare()
+    _K32, _PSAPI = _declare() if WINDOWS else (None, None)
 except Exception:
     _K32 = _PSAPI = None
 
 
 def working_set_mb() -> float:
-    """How much memory this process is holding, in megabytes. 0.0 if unknown."""
+    """How much memory this process is holding, in megabytes.
+
+    0.0 when it cannot be asked - off Windows, or if the call is refused.
+    Callers treat that as "unknown", never as "none".
+    """
     if _PSAPI is None:
         return 0.0
     try:
