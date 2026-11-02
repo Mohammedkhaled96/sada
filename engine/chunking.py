@@ -43,11 +43,11 @@ def speech_regions(audio: np.ndarray, sampling_rate: int = SAMPLE_RATE) -> list[
         return []
 
 
-# About one sentence. A chunk is the unit a speaker can change language in,
-# because Whisper decides one language per call - and it does worse than
-# write the rest in the wrong script: handed Arabic then English then
-# Spanish in a single call it detected Arabic, wrote the Arabic, and stopped,
-# losing ten seconds of speech entirely. Measured, that exact recording.
+# About one sentence, for a dictation. The reason is speed, not language:
+# Whisper pads every call to its window, and a short chunk can be encoded in
+# an 8-second window instead of the full thirty - 2.7 s against 18.5 s for the
+# same words, measured. A whole dictation handed over in one piece would need
+# the full window and cost several times as much.
 #
 # Low enough to put each utterance in its own call, and not lower: every call
 # pays for a whole encoder window, so chunking by the word would be slower
