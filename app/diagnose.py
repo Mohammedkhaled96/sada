@@ -177,14 +177,29 @@ def run(frame, device_index: int | None = None):
                    t("chk_speed_detail", seconds=f"{took:.1f}",
                      audio=f"{seconds:.0f}"))
 
-    # -- 8. can the shortcut be taken --------------------------------------
+        # -- 8. and does the tidying stage actually run --------------------
+        # The same call the job makes, on the words just recorded. This step
+        # exists because cleanup.py and fillers.py were once complete, tested,
+        # and connected to nothing: dictations reached Word with the
+        # corrections list never applied, and every unit test still passed. A
+        # check that stops at the transcript cannot see that. This one can.
+        from engine.job import polish
+
+        polished = polish(
+            [{"text": text, "language": rows[0].get("language") if rows else None}],
+            frame.settings.dictation_corrections)
+        shown = polished[0]["text"] if polished else ""
+        yield Step(t("chk_polish"), bool(shown) or not text, shown,
+                   t("chk_polish_fix"))
+
+    # -- 9. can the shortcut be taken --------------------------------------
     failed = getattr(frame, "hotkey_failures", [])
     wanted = frame.settings.hotkey_dictate
     taken = wanted not in failed
     yield Step(t("chk_hotkey"), taken, wanted,
                t("chk_hotkey_fix", key=wanted))
 
-    # -- 9. is there somewhere to write -----------------------------------
+    # -- 10. is there somewhere to write ----------------------------------
     from app import wordio
 
     try:
@@ -193,6 +208,13 @@ def run(frame, device_index: int | None = None):
         yield Step(t("chk_word"), True)
     except Exception:
         yield Step(t("chk_word"), False, "", t("chk_word_fix"))
+
+    # -- 11. and where to look when none of this explains it --------------
+    # Said last and always, pass or fail. Everything above tests this moment;
+    # the log is what holds the dictation that failed yesterday.
+    from engine import applog
+
+    yield Step(t("chk_log"), None, str(applog.path()))
 
 
 def _other_devices(_devices, skip):

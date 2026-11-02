@@ -1,13 +1,13 @@
-"""Voice typing: the emoji generator, the cleanup, and the recording guard.
+"""Voice typing on this machine: the microphone, the model, and real speech.
 
-The transcription itself is a job, and jobs are covered by tests/test_jobs.py.
-What is left here is what dictation adds on top: turning spoken emoji names
-into emoji, tidying what the model wrote without changing what it says, and
-refusing to queue a recording with nothing in it.
+The text pipeline moved to tests/test_text.py, which needs nothing but numpy
+and therefore runs in CI. What is left here is everything that cannot: the
+recording guard, a real transcription through the real model, and the checks
+that read the source to be sure dictation still goes through the job queue
+rather than growing a second pipeline of its own.
 
-The emoji and filler checks are written the other way round from most tests:
-more than half assert what is *kept*. The previous attempt at this removed the
-word راوي from somebody's dictation and nothing failed.
+Speech is generated through SAPI, so an Arabic and an English voice have to be
+installed; the sections that need them say so and skip if they are missing.
 
 Run:  PYTHONUTF8=1 .venv/Scripts/python.exe tests/test_voice_typing.py
 """
@@ -24,7 +24,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import config, dictate
-from engine import cleanup, emoji, fillers
 
 failures: list[str] = []
 
@@ -35,94 +34,8 @@ def check(label: str, ok: bool, detail: str = "") -> None:
         failures.append(label)
 
 
-# ------------------------------------------------------------------- emoji
-print("--- emoji asked for by name ---")
-
-for text, expected, why in [
-    ("Hello, how are you? Smile face emoji.", "Hello, how are you? 🙂.",
-     "the emoji, not the words naming it"),
-    ("thanks a lot thumbs up emoji", "thanks a lot 👍", "English, marker last"),
-    ("شكرا جزيلا ايموجي قلب", "شكرا جزيلا ❤️", "Arabic, marker first"),
-    ("علامة صح ايموجي", "✅", "Arabic, marker last"),
-    ("emoji of a heart", "❤️", "with the little words between"),
-    ("crying laughing emoji", "😂", "the longer name beats 'crying'"),
-]:
-    check(f"{why}: {text}", emoji.apply(text) == expected,
-          f"got {emoji.apply(text)!r}")
-
-print("\n--- and how many of them ---")
-
-for text, expected in [
-    ("put 3 smile face emoji", "put 🙂🙂🙂"),
-    ("three smile face emoji", "🙂🙂🙂"),
-    ("خمس ايموجي ابتسامة", "🙂🙂🙂🙂🙂"),
-    ("حط ٣ ايموجي قلب", "حط ❤️❤️❤️"),
-    ("اتنين ايموجي نار", "🔥🔥"),
-    ("a heart emoji", "❤️"),
-]:
-    check(f"counted: {text}", emoji.apply(text) == expected,
-          f"got {emoji.apply(text)!r}")
-
-# A misheard number must cost a wrong count, not a document full of emoji.
-many = emoji.apply("put 10 fire emoji")
-check("the count is capped", many.count("🔥") <= emoji.MAX_COUNT,
-      f"{many.count('🔥')} of them")
-
-print("\n--- and what is left alone ---")
-
-for text, why in [
-    ("my heart is fine", "no marker word, so no replacement"),
-    ("قلبي تعبان", "and none in Arabic either"),
-    ("I have 3 meetings today", "a number with no emoji named"),
-    ("راوي القصة حضر", "اوي three times inside a real word"),
-    ("the box is 5 mm wide", "mm is a unit, not a hesitation"),
-    ("err on the side of caution", "err is a verb"),
-    ("يعني إيه الكلام ده", "يعني carries meaning"),
-]:
-    check(f"kept: {text}",
-          fillers.strip_fillers(emoji.apply(text)) == text, why)
-
-# A name no phrasing can reach is a dead entry nothing else would notice.
-unreachable = [name for glyph, names in emoji.NAMES.items() for name in names
-               if emoji.apply(f"{name} emoji") != glyph]
-check("every name in the table can be said", not unreachable,
-      ", ".join(unreachable[:5]) or
-      f"{sum(len(v) for v in emoji.NAMES.values())} names, {len(emoji.NAMES)} emoji")
-
-
-# ----------------------------------------------------------------- cleanup
-print("\n--- repetition the decoder produced, not the speaker ---")
-
-for text, expected, why in [
-    ("the the the meeting is at four", "the meeting is at four",
-     "three in a row is the decoder"),
-    ("بسم الله بسم الله بسم الله خلاص", "بسم الله خلاص",
-     "a repeated phrase is the decoder losing its place"),
-    ("very very good", "very very good", "twice is something people say"),
-    ("لا لا مش كده", "لا لا مش كده", "and in Arabic too"),
-    ("نعم ، تمام .  خلاص", "نعم، تمام. خلاص", "spacing around punctuation"),
-]:
-    check(f"{why}: {text}", cleanup.tidy(text) == expected,
-          f"got {cleanup.tidy(text)!r}")
-
-check("emoji run as part of the pipeline, not separately",
-      cleanup.tidy("ok thumbs up emoji") == "ok 👍",
-      cleanup.tidy("ok thumbs up emoji"))
-
-print("\n--- replacements the user wrote ---")
-
-pairs = cleanup.parse_corrections(
-    "سدى = صدى\n# a comment\nعبد = Abd\nعبد الله = Abdullah")
-check("comments and blank lines are ignored", len(pairs) == 3, str(len(pairs)))
-check("the longest match wins, not the first",
-      cleanup.apply_corrections("مع عبد الله", pairs) == "مع Abdullah",
-      cleanup.apply_corrections("مع عبد الله", pairs))
-check("a replacement cannot eat the inside of a word",
-      cleanup.apply_corrections("سداسي", pairs) == "سداسي")
-
-
 # ------------------------------------------------------ the recording guard
-print("\n--- what is worth queueing ---")
+print("--- what is worth queueing ---")
 
 check("silence is recognised as silence",
       float(np.abs(np.zeros(16000, dtype=np.float32)).max()) < dictate.SILENT_PEAK)
@@ -143,25 +56,42 @@ with tempfile.TemporaryDirectory() as td:
               f"{w.getsampwidth() * 8} bit")
         check("and holds every sample", w.getnframes() == len(tone))
 
+
+# ------------------------------------------------- one pipeline, not two
 # A dictation is submitted the same way a picked file is. If these ever stop
 # matching, dictation has grown its own pipeline again - which is the thing
 # this design exists to prevent.
+print("\n--- a dictation is a job like any other ---")
+
 source = (ROOT / "app" / "dictate.py").read_text(encoding="utf-8")
 check("a dictation is queued as a job", "jobs.submit(" in source)
 check("and the progress window is the one transcribing already uses",
       "window.show_without_focus()" in source and "refresh_jobs()" in source)
 check("dictation does not transcribe anything itself",
       "stream_segments" not in source and "transcribe(" not in source)
+check("the corrections list is handed to the job",
+      "corrections=s.dictation_corrections" in source)
+check("whatever was playing is paused for the recording",
+      "mediapause.pause_playing()" in source
+      and "self._resume_media()" in source)
+
+job_source = (ROOT / "engine" / "job.py").read_text(encoding="utf-8")
+check("one language, voted over the whole recording, dictation included",
+      "lang, conf, _votes = detect_language(" in job_source
+      and "elif dictation:" not in job_source)
+check("only a dictation gets the polish",
+      "if dictation:" in job_source and "segments = polish(" in job_source)
+check("and only a dictation asks for sentence chunks",
+      'opts["chunk_target_s"] = SHORT_TARGET_S' in job_source)
 
 
-# ------------------------------------------------- more than one language
-print("\n--- a dictation that changes language ---")
-
-from engine.chunking import (SAMPLE_RATE, SHORT_TARGET_S, plan_chunks,
-                             speech_regions)  # noqa: E402
+# ------------------------------------------------------- real speech
+print("\n--- a real recording, through the real model ---")
 
 sys.path.insert(0, str(ROOT / "tests"))
-import speechgen                                                   # noqa: E402
+import speechgen                                                    # noqa: E402
+
+from engine.chunking import SAMPLE_RATE, SHORT_TARGET_S, plan_chunks  # noqa: E402
 
 english = speechgen.pick("david", "zira", "english")
 arabic = speechgen.pick("arabic", "leila")
@@ -170,77 +100,67 @@ if english is None or arabic is None:
     print(f"  (needs an English and an Arabic voice; this machine has "
           f"{len(speechgen.voices())} - skipped)")
 else:
-    mixed = speechgen.conversation([
+    spoken_ar = speechgen.conversation([
         ("السلام عليكم، التقرير جاهز للمراجعة.", arabic),
+        ("وسوف نراجعه غدا صباحا إن شاء الله.", arabic),
+    ], gap=1.0)
+    spoken_en = speechgen.conversation([
         ("The quarterly report is ready for review.", english),
-        ("Buenos dias, el informe esta listo para la revision.", english),
+        ("We will go through it tomorrow morning.", english),
     ], gap=1.0)
 
-    # Whisper decides one language per call and writes the whole call in that
-    # script, so the chunk is the unit a speaker can change language in. Given
-    # all three sentences in one call it detected Arabic, wrote the Arabic and
-    # stopped - ten seconds of speech lost. Measured, on this recording.
-    chunks = plan_chunks(mixed, target_s=SHORT_TARGET_S)
-    regions = speech_regions(mixed)
-    check("a short recording is chunked by sentence, not in one piece",
-          len(chunks) >= 3,
+    chunks = plan_chunks(spoken_ar, target_s=SHORT_TARGET_S)
+    check("a dictation is chunked by sentence, for the short window",
+          len(chunks) >= 2,
           ", ".join(f"{a / SAMPLE_RATE:.1f}-{b / SAMPLE_RATE:.1f}s"
                     for a, b in chunks))
-    check("there is a chunk boundary for every pause",
-          len(chunks) >= len(regions) - 1,
-          f"{len(regions)} regions, {len(chunks)} chunks")
-    check("and the chunks cover the whole recording",
-          chunks[0][0] <= regions[0]["start"] and chunks[-1][1] >= regions[-1]["end"])
-
-    # And a file is never chunked that way, however short it is. Letting
-    # every chunk of a file pick its own language ended an hour of Arabic
-    # with "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters,
-    # because one chunk near the end was heard as English.
+    # And a file is never chunked that way, however short it is. Letting every
+    # chunk of a file pick its own language ended an hour of Arabic with
+    # "Wassalamualaikum warahmatullahi wabarakatuh" in Latin letters.
     check("a file is not chunked by sentence, whatever its length",
-          len(plan_chunks(mixed)) == 1,
-          f"{len(plan_chunks(mixed))} chunks for {len(mixed) / SAMPLE_RATE:.0f}s")
-    long_audio = np.tile(mixed, 20)[: 20 * 60 * SAMPLE_RATE]
+          len(plan_chunks(spoken_ar)) == 1,
+          f"{len(plan_chunks(spoken_ar))} chunks for "
+          f"{len(spoken_ar) / SAMPLE_RATE:.0f}s")
+    long_audio = np.tile(spoken_ar, 20)[: 20 * 60 * SAMPLE_RATE]
     per_minute = len(plan_chunks(long_audio)) / (len(long_audio) / SAMPLE_RATE / 60)
     check("and a long one is chunked as it always was", per_minute < 10,
           f"{per_minute:.1f} chunks a minute")
 
-    job_source = (ROOT / "engine" / "job.py").read_text(encoding="utf-8")
-    check("a file gets one language, voted over the whole of it",
-          "lang, conf, _votes = detect_language(" in job_source)
-    check("and only dictation skips that vote",
-          "elif dictation:" in job_source)
-    check("only dictation asks for sentence chunks",
-          "dictation=True" in (ROOT / "app" / "dictate.py").read_text(encoding="utf-8")
-          and 'opts["chunk_target_s"] = SHORT_TARGET_S' in job_source)
-
-    from engine.models import info                                 # noqa: E402
+    from engine.models import info                                  # noqa: E402
 
     if not info("turbo").installed:
         print("  (large-v3-turbo is not installed - transcription skipped)")
     else:
         from engine.backends import load_backend                   # noqa: E402
         from engine.device import pick_device                      # noqa: E402
-        from engine.job import DECODE_OPTS                         # noqa: E402
+        from engine.job import run_transcription                   # noqa: E402
 
         backend = load_backend("openai", "turbo", pick_device("cpu"))
-        opts = dict(DECODE_OPTS)
-        opts["chunk_target_s"] = SHORT_TARGET_S
-        rows = list(backend.stream_segments(mixed, None, opts))
-        text = " ".join(r["text"] for r in rows)
+
+        def transcribe(audio, name):
+            with tempfile.TemporaryDirectory() as td:
+                wav = dictate.write_wav(audio, Path(td) / f"{name}.wav")
+                return run_transcription(wav, backend, Path(td) / "out",
+                                         dictation=True)
 
         def arabic_letters(s):
             return sum("؀" <= c <= "ۿ" for c in s)
 
-        check("every sentence survives, not just the first",
-              len(rows) >= 3, f"{len(rows)} segments")
-        check("the Arabic is in Arabic letters", arabic_letters(text) > 10,
-              f"{arabic_letters(text)} of them")
-        check("the English is not transliterated into them",
-              "report" in text.lower(), text[:60])
-        check("and neither is the Spanish",
-              "informe" in text.lower(), text[:60])
-        for row in rows:
-            print(f"        [{row['language']}] {row['text'].strip()[:58]}")
+        meta = transcribe(spoken_ar, "ar")
+        print(f"        [{meta['language']}] {meta['text'][:70]}")
+        check("the Arabic comes back in Arabic letters",
+              arabic_letters(meta["text"]) > 10,
+              f"{arabic_letters(meta['text'])} of them")
+        check("detected as one language for the whole recording",
+              meta["language"] == "ar", meta["language"])
+        check("and faces right to left", meta["rtl"] is True, str(meta["rtl"]))
+
+        meta = transcribe(spoken_en, "en")
+        print(f"        [{meta['language']}] {meta['text'][:70]}")
+        check("the English comes back in Latin letters",
+              "report" in meta["text"].lower(), meta["text"][:60])
+        check("detected as English", meta["language"] == "en", meta["language"])
+        check("and faces left to right", meta["rtl"] is False, str(meta["rtl"]))
 
 
 # ------------------------------------------------------------- local only
@@ -251,13 +171,14 @@ for folder in ("engine", "app"):
     for module in sorted((ROOT / folder).glob("*.py")):
         text = module.read_text(encoding="utf-8")
         found = [w for w in ("generativelanguage", "api_key", "gemini",
-                             "openai.com") if w in text]
+                             "openai.com", "api.groq.com") if w in text]
         if found:
             reaching_out.append(f"{module.name}: {', '.join(found)}")
 check("no module reaches an outside service", not reaching_out,
       "; ".join(reaching_out))
 check("and no setting could turn one on",
-      not any(f.startswith("dictation_ai") for f in vars(config.Settings())),
+      not any(f.startswith("dictation_ai") or f.endswith("_key")
+              for f in vars(config.Settings())),
       ", ".join(f for f in vars(config.Settings()) if "dictation" in f))
 
 

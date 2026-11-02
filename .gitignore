@@ -12,6 +12,10 @@ settings.json
 settings.tmp
 # The daemon writes the port and token it is listening on.
 endpoint.json
+# This one person's run: which microphone they used, what failed and when.
+# Theirs to send when something goes wrong, not ours to publish.
+sada.log
+sada.log.1
 # Transcripts and checkpoints produced by a run.
 out/
 # Audio dropped in for the container to read.

@@ -335,6 +335,7 @@ class FakeDictation:
 class FakeApp:
     settings = Settings()
     dictation = FakeDictation()
+    window_dismissed = False
 
     def start_transcription(self): pass
     def speak_status(self): pass
@@ -342,6 +343,8 @@ class FakeApp:
     def open_settings(self): pass
     def open_help(self): pass
     def quit_app(self): pass
+    def cancel_selected_job(self): pass
+    def clear_finished_jobs(self): pass
 
 
 mw = MainWindow(FakeApp())
@@ -370,7 +373,91 @@ check("labels follow a shortcut change",
       "Ctrl+Alt+Z" in mw.buttons["transcribe"].GetLabel(),
       mw.buttons["transcribe"].GetLabel())
 FakeApp.settings.hotkey_transcribe = "Ctrl+Shift+T"
+check("it welcomes the user by name", "Sada" in mw.welcome.GetLabel(),
+      mw.welcome.GetLabel())
+# The spoken welcome named four shortcuts and left out the one for the
+# feature the program is most used for.
+_welcome = t("say_welcome", app="Sada", k_start="Ctrl+Shift+T",
+             k_dictate="Ctrl+Shift+D", k_window="Ctrl+Shift+W")
+check("the spoken welcome names the dictation shortcut",
+      "Ctrl+Shift+D" in _welcome, _welcome)
+check("and the transcribe one", "Ctrl+Shift+T" in _welcome)
+check("and where to find the rest", "Ctrl+Shift+W" in _welcome)
+check("and can be maximised like any other window",
+      bool(mw.GetWindowStyle() & wx.MAXIMIZE_BOX))
 mw.Destroy()
+
+
+# ------------------------------------------------------- closing the window
+# The reported bug: Escape, Alt+F4 and Ctrl+F4 all left it on screen. The
+# accelerator table was there and never fired, because the multiline status
+# box takes focus when the window opens and swallows Escape before the frame
+# sees it. And once closed it came straight back, because every job called
+# show_without_focus().
+print("\n--- the window closes, and stays closed ---")
+
+app_stub = FakeApp()
+win = MainWindow(app_stub)
+win.Show()
+wx.Yield()
+
+
+def send_key(window, keycode, ctrl=False):
+    event = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+    event.SetKeyCode(keycode)
+    event.SetControlDown(ctrl)
+    event.SetEventObject(window)
+    window.GetEventHandler().ProcessEvent(event)
+    wx.Yield()
+
+
+win.status.SetFocus()
+wx.Yield()
+check("the status box is what has focus when it opens",
+      win.FindFocus() is win.status)
+
+send_key(win, wx.WXK_ESCAPE)
+check("Escape closes it even from there", not win.IsShown())
+check("and the choice is remembered", app_stub.window_dismissed)
+
+win.show_without_focus()
+wx.Yield()
+check("a new job does not drag it back open", not win.IsShown())
+
+win.show_and_focus()
+wx.Yield()
+check("asking for it opens it again", win.IsShown())
+check("which takes back the dismissal", not app_stub.window_dismissed)
+
+for label, key, ctrl in (("Ctrl+F4", wx.WXK_F4, True),
+                         ("Ctrl+W", ord("W"), True)):
+    win.show_and_focus()
+    wx.Yield()
+    send_key(win, key, ctrl)
+    check(f"{label} closes it", not win.IsShown())
+
+win.show_and_focus()
+wx.Yield()
+win.Close()                       # what Alt+F4 and the title bar X send
+wx.Yield()
+check("Alt+F4 hides it rather than quitting", not win.IsShown())
+check("and the window is still there to reopen", bool(win))
+win.Destroy()
+
+
+# ---------------------------------------------------------------- the tray
+print("\n--- the tray icon and its menu ---")
+from app.main import TRAY_LIGHTS, lit_icon
+
+check("every state has its own light",
+      {"tray_ready", "tray_working", "tray_dictating", "tray_unloaded"}
+      <= set(TRAY_LIGHTS), ", ".join(sorted(TRAY_LIGHTS)))
+check("and each one builds an icon",
+      all(lit_icon(state).IsOk() for state in TRAY_LIGHTS))
+check("ready is green, so it reads as running at a glance",
+      TRAY_LIGHTS["tray_ready"][1] > TRAY_LIGHTS["tray_ready"][0])
+check("and the microphone being open is red",
+      TRAY_LIGHTS["tray_dictating"][0] > TRAY_LIGHTS["tray_dictating"][1])
 
 print("\n--- every window builds in both languages ---")
 for _lang in ("en", "ar"):
@@ -409,9 +496,38 @@ try:
     check("keeps the paragraph break", "هذا اختبار للإدراج" in body)
     check("reports where it landed", where["end"] > where["start"],
           f"{where['start']}..{where['end']}")
-    check("cursor is left at the start of the new text",
-          word.Selection.Range.Start == where["start"],
-          f"{word.Selection.Range.Start} vs {where['start']}")
+    # After the text, not before it. Collapsing to the start used to let a
+    # screen reader user read from the top at once, and it put the second job's
+    # text in front of the first one's - so two dictations came out in the
+    # opposite order to the one they were spoken in.
+    check("cursor is left after the new text",
+          word.Selection.Range.Start >= where["end"] - 1,
+          f"{word.Selection.Range.Start} vs end {where['end']}")
+
+    # The bug these checks exist for: a second job landing against the end of
+    # the first, the two sentences running together as one. In its own
+    # document, so the undo check further down still sees a single insertion.
+    pair = word.Documents.Add()
+    try:
+        one = wordio.insert_transcript(word, "الجملة الأولى.", rtl=True,
+                                       mode="cursor")
+        two = wordio.insert_transcript(word, "والجملة التانية.", rtl=True,
+                                       mode="cursor")
+        body = pair.Content.Text
+        check("a second job starts after the first, not before it",
+              two["start"] >= one["end"] - 1,
+              f"{two['start']} after {one['end']}")
+        check("with a blank line between them, not stuck together",
+              "الجملة الأولى.\r\rوالجملة التانية." in body,
+              repr(body.strip()))
+        # Exactly one blank line, not a stack of them: the caret was already
+        # at the start of a paragraph, so only the missing break is added.
+        check("exactly one blank line, not several",
+              "\r\r\r" not in body, repr(body.strip()))
+    finally:
+        pair.Close(SaveChanges=0)
+        doc.Activate()
+        word.Selection.SetRange(where["end"], where["end"])
 
     check("reports that it set the reading order", where["reading_order_set"] is True)
     rng = doc.Range(where["start"], where["start"] + 5)

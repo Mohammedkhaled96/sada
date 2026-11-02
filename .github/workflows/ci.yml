@@ -37,6 +37,23 @@ jobs:
           pip install ruff
           ruff check --select E9,F63,F7,F82 --output-format=github .
 
+      # The text pipeline needs numpy and ffmpeg and nothing else, so it can
+      # run here. It is the part worth running: engine/cleanup.py and
+      # engine/fillers.py were once complete, tested and connected to nothing,
+      # and compileall had no opinion about it.
+      - name: Install what the text tests need
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          pip install numpy
+
+      - name: Text pipeline tests
+        run: python tests/test_text.py
+        env:
+          PYTHONUTF8: '1'
+          # Keep the log and any scratch output away from the checkout.
+          SADA_STATE_DIR: ${{ runner.temp }}/sada-state
+
       - name: Validate the winget manifests
         run: |
           pip install pyyaml
