@@ -22,7 +22,8 @@ import numpy as np
 import wx
 
 from app.i18n import t
-from engine import mic
+from app import mediapause, sendtext
+from engine import applog, mic
 from engine.paths import OUT_DIR
 
 # Short, distinct, and not alarming. Rising to start, falling to stop.
@@ -74,6 +75,13 @@ class DictationController:
     def __init__(self, frame):
         self.frame = frame
         self.recorder: mic.Recorder | None = None
+        # Players paused for the length of this recording, so exactly those can
+        # be put back and nothing else is started.
+        self._paused_media: list[str] = []
+        # The window the user was typing in when they pressed the shortcut.
+        # The text goes back to that window, not to whatever is in front when
+        # the transcription finishes several seconds later.
+        self._target_hwnd = 0
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._busy = False
@@ -81,6 +89,17 @@ class DictationController:
         self._blocks: list[np.ndarray] = []
 
     # -- state -------------------------------------------------------------
+    def preload(self) -> None:
+        """Pay PortAudio's start-up cost now rather than in the first dictation.
+
+        Importing sounddevice loads its own PortAudio build and enumerating the
+        devices is what initialises the host APIs - on this machine eighteen
+        entries for two microphones. Doing it here, on the warm-up thread,
+        keeps it out of the moment the user presses the shortcut. No stream is
+        opened: the device is not touched until a dictation actually starts.
+        """
+        mic.input_devices()
+
     @property
     def recording(self) -> bool:
         return self._busy and not self._stop.is_set()
@@ -114,11 +133,25 @@ class DictationController:
             self._refuse(t("say_load_failed", error=self.frame.backend_error or ""))
             return
 
+        self._target_hwnd, window_class, process = sendtext.focused_window()
+
+        if settings.dictation_pause_media:
+            self._paused_media = mediapause.pause_playing()
+            if self._paused_media:
+                applog.write(f"paused {len(self._paused_media)} player(s): "
+                             + ", ".join(self._paused_media), where="dictation")
+
         try:
             self.recorder = mic.Recorder(device=self._device_index(settings))
             self.recorder.start()
         except mic.MicError as exc:
             self.recorder = None
+            # Opening the microphone failed: never leave the user's music
+            # paused because of a dictation that did not happen.
+            self._resume_media()
+            applog.failed(f"opening the microphone "
+                          f"{settings.dictation_device or '(system default)'}",
+                          exc, where="dictation")
             self._refuse(t("say_dictation_mic_failed", error=exc))
             return
 
@@ -132,7 +165,11 @@ class DictationController:
 
         tone(TONE_START)
         self.frame.say(t("say_dictation_start"), interrupt=True)
-        self.frame.tray.set_state("tray_dictating")
+        self.frame.paint_tray()
+        applog.write(
+            f"recording from {settings.dictation_device or '(system default)'}"
+            f" at {self.recorder.rate} Hz, for "
+            f"{process or window_class or '?'}", where="dictation")
 
     def stop(self) -> None:
         if not self.recording:
@@ -168,10 +205,17 @@ class DictationController:
             if block.size:
                 self._blocks.append(block)
         except Exception as exc:
+            applog.failed("reading from the microphone", exc, where="dictation")
             wx.CallAfter(self.frame.say, t("say_error", error=exc), True)
         finally:
             recorder.stop()
         wx.CallAfter(self._hand_over)
+
+    def _resume_media(self) -> None:
+        """Put back exactly the players this dictation paused."""
+        if self._paused_media:
+            players, self._paused_media = self._paused_media, []
+            mediapause.resume(players)
 
     def _is_silent(self) -> bool:
         if not self._blocks:
@@ -180,20 +224,32 @@ class DictationController:
 
     def _deaf(self) -> None:
         tone(TONE_ERROR)
+        applog.write(f"nothing heard in the first {DEAF_AFTER_S:.0f}s - the "
+                     f"microphone may be muted", where="dictation")
         self.frame.say(t("say_dictation_not_hearing"), interrupt=True)
 
     # -- handing it to the queue -------------------------------------------
     def _hand_over(self) -> None:
         """Queue the recording as a job, the same as a file the user picked."""
-        self.frame.tray.set_state("tray_ready")
+        self.frame.paint_tray()
+        self._resume_media()
         self._thread = None
         self._busy = False
         blocks, self._blocks = self._blocks, []
+        # Dropped blocks mean the machine could not keep up with the sound
+        # card, which is audible as a gap and reads as a missing word.
+        overflows = self.recorder.overflows if self.recorder else 0
 
         if self._abandoned:
+            applog.write("cancelled by the user", where="dictation")
             return
 
         audio = np.concatenate(blocks) if blocks else np.empty(0, dtype=np.float32)
+        peak = float(np.abs(audio).max()) if audio.size else 0.0
+        rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size else 0.0
+        applog.write(f"stopped: {audio.size / mic.SAMPLE_RATE:.1f}s recorded, "
+                     f"peak {peak:.4f}, rms {rms:.4f}, "
+                     f"{overflows} dropped block(s)", where="dictation")
         if audio.size and float(np.abs(audio).max()) >= SILENT_PEAK:
             pass
         else:
@@ -227,10 +283,16 @@ class DictationController:
             # A file picked from disk is not treated this way - see
             # engine/job.py for why that distinction has to exist.
             dictation=True,
+            # The names this user keeps having misheard, written once in
+            # Settings instead of fixed by hand after every dictation.
+            corrections=s.dictation_corrections,
+            # Where it came from, and therefore where it goes back to.
+            target_hwnd=self._target_hwnd,
         )
         # The window the user already knows from transcribing a file: name,
         # length, language, progress, time left, speed, model. It does not
         # take focus, so Word keeps the caret where the text will land.
+        applog.write(f"queued job {job.id} as {path.name}", where="dictation")
         self.frame._last_spoken = 0.0
         self.frame.window.show_without_focus()
         self.frame.refresh_jobs()
@@ -244,6 +306,7 @@ class DictationController:
     # -- helpers -----------------------------------------------------------
     def _refuse(self, message: str) -> None:
         tone(TONE_ERROR)
+        applog.write(f"refused: {message}", where="dictation")
         self.frame.say(message, interrupt=True)
 
     def _device_index(self, settings) -> int | None:

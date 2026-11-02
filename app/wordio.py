@@ -155,6 +155,33 @@ def set_reading_order(rng, rtl: bool) -> bool:
     return False
 
 
+BREAKS = ("\r", "\n", "\x07")           # paragraph mark, line break, cell mark
+
+
+def breaks_before(doc, position: int, most: int = 2) -> int:
+    """How many line breaks are immediately before `position`, up to `most`.
+
+    Used to put exactly one blank line in front of each insertion: two breaks
+    in a row are what a blank line is made of, so what is missing is added and
+    nothing more. Counting rather than assuming matters because the caret is
+    sometimes already at the start of a paragraph and sometimes mid-sentence,
+    and adding a fixed number of breaks gives one of those two cases a stack
+    of empty paragraphs.
+    """
+    if position <= 0:
+        return most                     # the start of the document needs none
+    found = 0
+    try:
+        while found < most and position - found > 0:
+            char = doc.Range(position - found - 1, position - found).Text
+            if char not in BREAKS:
+                break
+            found += 1
+    except Exception:
+        return 0                        # cannot tell, so add the full break
+    return found
+
+
 def insert_transcript(app, text: str, *, rtl: bool = False,
                       mode: str = "cursor", heading: str | None = None) -> dict:
     """Write the transcript into Word.
@@ -166,13 +193,22 @@ def insert_transcript(app, text: str, *, rtl: bool = False,
 
     The whole insertion is one undo record, so a single Ctrl+Z removes all of
     it rather than making the user hold it down for a three-hour transcript.
-    The selection is left collapsed at the *start* of the new text so a screen
-    reader user can begin reading immediately with their normal reading keys.
+
+    **Every insertion has a blank line before it and the caret is left after
+    it.** The blank line is made up to rather than added blindly:
+    `breaks_before` counts what is already there, so a caret sitting
+    mid-sentence gets two breaks and one already on an empty line gets none.
+
+    Neither half of that is cosmetic. Without the separation a second job lands
+    against the end of the first and the two run together as one sentence.
+    Without the caret moving to the end, the second insertion happens at the
+    *start* of the first - so two jobs come out in the opposite order to the
+    one they were spoken in. This used to leave the caret at the start so a
+    screen reader user could read from the top at once; correct order is worth
+    more than that, and the spoken confirmation already says what landed where.
     """
     if not text:
         return {"start": 0, "end": 0, "document": ""}
-
-    body = (f"{heading}\n{text}\n" if heading else f"{text}\n")
 
     undo = None
     try:                                    # UndoRecord needs Word 2010+
@@ -199,15 +235,17 @@ def insert_transcript(app, text: str, *, rtl: bool = False,
             sel.HomeKey(Unit=WD_STORY_END)
 
         start = int(sel.Range.Start)
+        lead = "\n" * (2 - breaks_before(doc, start))
+        body = (f"{lead}{heading}\n{text}\n" if heading
+                else f"{lead}{text}\n")
+
         sel.Range.InsertAfter(body)         # faster than TypeText on long text
 
         rng = doc.Range(start, start + len(body))
         reading_order = set_reading_order(rng, rtl)
 
         end = int(rng.End)
-        # Collapse to the beginning of what we inserted, so a screen reader user
-        # can start reading straight away with their normal reading keys.
-        sel.SetRange(start, start)
+        sel.SetRange(end, end)
         return {"start": start, "end": end, "document": str(doc.Name),
                 "reading_order_set": reading_order}
     finally:
