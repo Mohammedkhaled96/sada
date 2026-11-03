@@ -1,6 +1,6 @@
 # Sada
 
-**Transcription for Microsoft Word.**
+**Transcription for Microsoft Word. Voice typing for everything else.**
 
 [![Docker Hub](https://img.shields.io/badge/docker-mohammedkhaledmahmoud%2Fsada-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/mohammedkhaledmahmoud/sada)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -8,6 +8,7 @@
 [![Whisper large-v3-turbo](https://img.shields.io/badge/Whisper-large--v3--turbo-412991?logo=openai&logoColor=white)](#how-it-is-put-together)
 [![100% local](https://img.shields.io/badge/audio-never%20leaves%20your%20PC-success)](#why-it-exists)
 [![Accessible](https://img.shields.io/badge/screen%20readers-NVDA%20%7C%20JAWS-5A2D82)](docs/accessibility.md)
+[![Voice typing](https://img.shields.io/badge/voice%20typing-any%20application-0F9D58)](#voice-typing)
 [![Price](https://img.shields.io/badge/price-free-brightgreen)](#why-it-exists)
 [![Latest release](https://img.shields.io/github/v/release/Mohammedkhaled96/sada?label=latest&logo=github)](https://github.com/Mohammedkhaled96/sada/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Mohammedkhaled96/sada/total?logo=github&label=downloads)](https://github.com/Mohammedkhaled96/sada/releases)
@@ -20,6 +21,11 @@ Press a shortcut in Word, pick an audio or video file, and the transcript is
 inserted at your cursor. No subscription, no API key, no account, no upload — the
 audio never leaves the machine.
 
+Press a different shortcut anywhere at all, speak, press it again, and what you
+said is written where the cursor is — Word, Notepad, a browser, a message box in
+Teams or WhatsApp. The same model, on the same machine, with nothing sent
+anywhere.
+
 Built to be fully usable from the keyboard and with the **NVDA** and **JAWS**
 screen readers.
 
@@ -31,7 +37,7 @@ screen readers.
 
 | | |
 |---|---|
-| **Direct download** | [`Sada-Setup-1.0.0.exe`](https://github.com/Mohammedkhaled96/sada/releases/download/v1.0.0/Sada-Setup-1.0.0.exe) (238 MB) |
+| **Direct download** | [`Sada-Setup-1.1.1.exe`](https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.1/Sada-Setup-1.1.1.exe) (223 MB) |
 | **All releases** | [releases page](https://github.com/Mohammedkhaled96/sada/releases) |
 | **Checksum** | `SHA256SUMS.txt` is attached to each release |
 
@@ -81,6 +87,10 @@ installed, and keeps the audio on your own disk.
 On clear Arabic speech it writes `بسم الله الرحمن الرحيم` and `المكفوفين`
 correctly, where a small model produces `بسم الله رحمة رحمة` and `المكففين`.
 
+**Voice typing into any application.** Press `Ctrl+Shift+D`, speak, press it
+again, and the words land at the cursor — in Word, in Notepad, in a browser, in
+a message box in Teams or WhatsApp. See [Voice typing](#voice-typing).
+
 **The language is detected for you.** There is no language picker. Five windows
 are sampled from across the file and voted on, then the result is locked — so a
 file that opens with music, silence or a greeting in another language is still
@@ -105,6 +115,83 @@ messages. Choosing Arabic mirrors the layout as well as translating it.
 **Any format.** Anything ffmpeg reads: mp3, m4a, wav, ogg, opus, wma, flac, aac,
 and video files such as mp4, mkv, avi, mov and webm, whose audio is extracted
 automatically.
+
+---
+
+## Voice typing
+
+Press **`Ctrl+Shift+D`**, speak, press it again. The words appear where the
+cursor is — Word, Notepad, a browser, a message box in Teams or WhatsApp. The
+same model that transcribes files, on the same machine, with nothing sent
+anywhere and nothing to sign up for.
+
+```
+Ctrl+Shift+D ─► record ─► Whisper ─► tidy up ─► wherever the cursor is
+                (mic)     (models/)  (rules)     (Word over COM, or a paste)
+```
+
+**It is a job in the same queue.** A dictation is a recording, and the
+recording goes to the queue that transcribes files — so the progress, the time
+estimate, the speed, the jobs list, cancelling and the insertion into Word are
+the ones that already existed and were already tested, not a second copy of
+each. A dictation queued while a file is running waits its turn and says so.
+
+**Anywhere, not only in Word.** In Word the text is written over COM: one undo
+with a single `Ctrl+Z`, and the paragraph's reading direction set from the
+detected language. Everywhere else it goes through the clipboard — and the
+clipboard is put back afterwards, because somebody who copied a paragraph and
+then dictated a sentence should still have the paragraph. The text returns to
+the window the dictation *started* in rather than whatever has focus when it
+finishes, which matters because the seconds spent transcribing are long enough
+for a notification to take the foreground.
+
+**Short clips are fast.** Whisper pads every clip to a 30-second window, so a
+four-second phrase used to cost what thirty seconds costs — and it did, which
+is why the first attempt at this was unusable. The encoder's positional
+embedding is fixed rather than learned, so a shorter window is well defined:
+`engine/window.py` encodes 8 or 14 seconds instead of 30, and anything longer
+falls back to the full window, so transcribing a file is untouched. Measured on
+the same speech, with the same model, for the same text out:
+
+| | Wall |
+|---|---|
+| 30 s window, language auto-detected | 18.5 s |
+| 30 s window, language passed in | 9.3 s |
+| 14 s window, language passed in | 4.2 s |
+| **8 s window, language passed in** | **2.7 s** |
+
+**One language per dictation**, detected over the whole recording by a vote on
+samples from several places and then handed to every chunk — the same code that
+does it for a file. So the reading direction has a single answer, and a sentence
+heard as the wrong language cannot be written in the wrong script.
+
+**Then the text is tidied, and only the text.** Repetition the decoder produced
+is collapsed, hesitation sounds are removed by a whole-word list with no
+patterns, and your own replacements from Settings — `wrong = right`, one per
+line — are applied last so they win. Rewriting what you said, rephrasing it or
+guessing what you meant is deliberately not done: the most useful thing in the
+project this feature was modelled on turned out to be a patch whose whole
+purpose is to stop a speech backend putting an AI-written answer where the
+transcript should be.
+
+**A password box is refused**, out loud, and nothing is written.
+
+**Settings → Dictation → Check dictation** records three seconds and reports
+eleven things, among them the peak level, the words it heard written back, and
+how long that took on this computer. It records rather than reading the Windows
+settings, because the program was once deaf and said nothing about it: all three
+microphone consent keys said *Allow* while the built-in array recorded a peak of
+0.00003. If nothing is heard, it tries the other inputs and names one that did
+hear something.
+
+> **`Ctrl+Shift+D` is Word's own shortcut for double underline.** A global
+> hotkey takes it before Word sees it, so while Sada is running, Sada gets it.
+> It is changeable like every other shortcut. It is also the one shortcut that
+> is never gated on "only when Word is in front" — dictating into Teams is the
+> point of it.
+
+Full detail, with the measurements and what was rejected, in
+**[docs/voice-typing.md](docs/voice-typing.md)**.
 
 ---
 
@@ -140,21 +227,32 @@ above and use the container: `docker pull mohammedkhaledmahmoud/sada`. See
 
 ## Using it
 
+**To transcribe a recording:**
+
 1. Open Word and a document.
 2. Press **`Ctrl+Shift+T`**.
 3. Pick the file.
 4. The program says which language it found, then reports progress.
 5. The transcript is inserted, with the cursor at the start of it.
 
+**To voice type:**
+
+1. Put the cursor where you want the words — Word, Notepad, Teams, anywhere.
+2. Press **`Ctrl+Shift+D`**. A rising tone, and "start typing".
+3. Speak.
+4. Press **`Ctrl+Shift+D`** again. A falling tone, and the microphone closes.
+5. The words are written at the cursor. More in [Voice typing](#voice-typing).
+
 | Shortcut | Does |
 |---|---|
 | `Ctrl+Shift+T` | Start transcribing — opens the file chooser |
+| `Ctrl+Shift+D` | Start and stop voice typing — in any application, not only Word |
 | `Ctrl+Shift+W` | Program window — status, the job list, every command |
 | `Ctrl+Shift+O` | Settings |
 | `Ctrl+Shift+U` | Speak the status: progress and time remaining |
 | `Ctrl+Shift+X` | Cancel the running job |
 
-All five are configurable. The full guide is **[USER_GUIDE.md](USER_GUIDE.md)**.
+All six are configurable. The full guide is **[USER_GUIDE.md](USER_GUIDE.md)**.
 
 ---
 
@@ -192,8 +290,14 @@ app/            the Windows desktop program
   main.py       tray app, global hotkeys, hand-off to Word
   gui.py        main window, settings, help, about
   jobs.py       the job queue; submitting is never blocked by a cancel
+  dictate.py    voice typing: record, refuse an empty recording, announce
+  sendtext.py   text into any window: focus, modifiers, clipboard, fallback
   wordio.py     Word over COM: insert, reading order, single undo
   speech.py     announcements via JAWS COM, the NVDA DLL, or SAPI
+  diagnose.py   the dictation check — proves the microphone, does not assume it
+  mediapause.py pauses what is playing for the length of a recording
+  memory.py     gives the working set back between jobs
+  autostart.py  a shortcut in the Startup folder, which the user can delete
   i18n.py       every user-visible string as an (english, arabic) pair
   config.py     settings and keyboard-shortcut parsing
 
@@ -201,10 +305,16 @@ engine/         platform-independent; this is what the container runs
   job.py        one transcription: decode, detect, stream, checkpoint, write
   chunking.py   splits on silence, so progress is real and resume is possible
   backends.py   openai-whisper and faster-whisper behind one interface
+  mic.py        microphone capture, with the levels that prove it is working
+  window.py     an 8- or 14-second encoder window instead of the full thirty
+  cleanup.py    collapses what the decoder repeated; applies the user's list
+  fillers.py    removes hesitation sounds, matched whole, with no patterns
   models.py     which checkpoints are installed, and verified downloads
   audio.py      ffmpeg decoding to float32 mono 16 kHz
   langdetect.py language voting across windows spread over the file
   textout.py    paragraphs, junk filtering, .txt/.srt/.json
+  paths.py      one definition of where models, transcripts and settings live
+  applog.py     a rotating log file, because there is no console to read
   device.py     GPU detection with automatic CPU fallback
   daemon.py     HTTP API on 127.0.0.1, for scripting and the container
   transcribe.py command line interface
@@ -240,8 +350,8 @@ Four tags are published for every release:
 
 | Tag | Moves to | Use it when |
 |---|---|---|
-| `1.0.1` | nothing, ever | you need the same bytes every time — CI, a reproducible result |
-| `1.0` | the newest 1.0.x | you want fixes but no new behaviour |
+| `1.1.1` | nothing, ever | you need the same bytes every time — CI, a reproducible result |
+| `1.1` | the newest 1.1.x | you want fixes but no new behaviour |
 | `1` | the newest 1.x | **the sensible default**, and what `docker-compose.yml` uses |
 | `latest` | the newest release of all | you are trying it out and do not mind a major upgrade |
 
@@ -260,13 +370,14 @@ stays a Windows program.
 | Transcription, automatic language detection, resume | yes | yes |
 | HTTP API | via `engine.daemon` | yes, the point of it |
 | Insert into Word | yes | no — needs Word |
+| Voice typing | yes | no — needs Windows and a microphone |
 | Interface, shortcuts, screen reader | yes | no — needs Windows |
 
 | | |
 |---|---|
-| Download | **613 MB** compressed (2.65 GB on disk) |
+| Download | **601 MB** compressed |
 | RAM | **at least 6 GB for the container** — the model is held in float32 |
-| Tags | `latest`, `1.0.0` |
+| Tags | `latest`, `1`, `1.1`, `1.1.1` |
 
 ---
 
@@ -446,7 +557,7 @@ Needs the project venv, `binfmpeg.exe`, PyInstaller, and
 .venv\Scripts\python.exe -m PyInstaller Sada.spec --noconfirm
 
 # 2. Portable release
-powershell -Command "Compress-Archive -Path 'dist\Sada\*' -DestinationPath 'release\Sada-1.0.0-portable.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\Sada\*' -DestinationPath 'release\Sada-1.1.1-portable.zip' -Force"
 
 # 3. Installer
 "%LocalAppData%\Programs\Inno Setup 6\ISCC.exe" installer\Sada.iss
@@ -475,12 +586,14 @@ while an OV one needs weeks of downloads to build it.
 
 ## Tests
 
+Each file is a script, run on its own:
+
 ```bash
-run-tests.bat
+.venv\Scripts\python.exe tests\test_text.py
 ```
 
-**192 checks** across five files. The Word tests launch Word, write to a **new**
-document, and close it without saving — they never touch a document you have open.
+Ten files. The Word tests launch Word, write to a **new** document, and close it
+without saving — they never touch a document you have open.
 
 | File | Covers |
 |---|---|
@@ -489,6 +602,18 @@ document, and close it without saving — they never touch a document you have o
 | `test_jobs.py` | the queue, non-blocking cancel, honest progress, models |
 | `test_app.py` | settings, shortcuts, both languages, every window, Word |
 | `test_end_to_end.py` | audio in, text in a Word document out |
+| `test_text.py` | **58 checks, and the only file CI runs** — cleanup, fillers and the corrections list, through the real job function |
+| `test_voice_typing.py` | the microphone, the model and real speech, on this machine |
+| `test_window.py` | the short encoder window: does it cost less, and say the same |
+| `test_daemon.py` | the daemon started for real, and every endpoint over HTTP |
+| `test_paths.py` | where data lives, and what the startup cleanup refuses to delete |
+
+`test_text.py` exists because `engine/cleanup.py` and `engine/fillers.py` were
+once complete, documented, tested — and imported by nothing, so a dictation
+reached Word with the user's corrections list never applied and every unit test
+still passed. A test of a part cannot see that no whole calls it. That file runs
+the real job function and asserts the text that comes out of it, and it needs
+only numpy and ffmpeg, so CI runs it on every push.
 
 ---
 
@@ -497,6 +622,7 @@ document, and close it without saving — they never touch a document you have o
 | | |
 |---|---|
 | [USER_GUIDE.md](USER_GUIDE.md) | Everything a user needs, in detail |
+| [docs/voice-typing.md](docs/voice-typing.md) | Voice typing: how it works, every measurement, and what was rejected |
 | [docker/README.md](docker/README.md) | Running the engine in a container |
 | [docs/accessibility.md](docs/accessibility.md) | The screen-reader requirements, and what they changed |
 | [docs/accuracy-notes.md](docs/accuracy-notes.md) | Why each engine setting is what it is, with measurements |
