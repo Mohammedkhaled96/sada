@@ -4,16 +4,17 @@ __pycache__/
 
 # Model checkpoints: 461 MB to 2.9 GB each, fetched on demand.
 models/
-# settings.json is tracked on purpose, so a fresh clone and a fresh install
-# start from the same known configuration rather than from whatever the
-# program happens to write first.
+# One person's settings, kept beside the project rather than under the user
+# profile. Not committed: it holds their shortcuts, their chosen model, their
+# microphone and their corrections list, and committing it hands all of that
+# to everyone who clones this - and overwrites theirs on the next pull.
 #
-# The cost of that is real and worth knowing: this file is now part of the
-# repository, so a `git pull` overwrites whatever settings are in the working
-# copy, and every change made in the Settings window shows up as a modified
-# file. Before committing anything else, check `git diff settings.json` - the
-# microphone name, the corrections list and the chosen shortcuts all live in
-# here, and they are nobody else's business.
+# It was tracked briefly, for 1.1.1, and taken back out: every change made in
+# the Settings window turned into a modified file in the middle of unrelated
+# work, which is a conflict waiting to happen and no use to anybody. Nothing
+# is lost by leaving it out - app/config.py falls back to the defaults when
+# the file is missing and writes a fresh one.
+settings.json
 settings.tmp
 # The daemon writes the port and token it is listening on.
 endpoint.json
