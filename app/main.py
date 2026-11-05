@@ -273,10 +273,16 @@ class AppFrame(wx.Frame):
                          style=wx.FRAME_NO_TASKBAR)
         self.settings = config.load()          # also applies the saved language
         self.speaker = Speaker(self.settings.speak, self.settings.speak_via_sapi)
+        # The resolved folders go in the log because the hardest thing to
+        # diagnose from the outside was a model the program could not see:
+        # the user had the file, the program said it was not installed, and
+        # nothing anywhere said which folder had been looked in.
+        found = paths.found_checkpoints()
         applog.write(
             f"starting: model={self.settings.model} device={self.settings.device} "
             f"language={self.settings.language} insert={self.settings.insert_mode} "
-            f"state={paths.STATE_DIR}", where="app")
+            f"state={paths.STATE_DIR} models={paths.MODELS_DIR} "
+            f"checkpoints={[str(p) for p in found] or 'none found'}", where="app")
 
         self.backend = None
         self.backend_error: str | None = None
@@ -302,18 +308,30 @@ class AppFrame(wx.Frame):
         except Exception:
             pass            # housekeeping must never stop the app from starting
 
-        # One location for this program's data, not two. Settings moved out of
-        # the user profile and into the program's own folder, so an older copy
-        # could be left behind there - a second settings.json that nothing
-        # reads, and perhaps gigabytes of models nothing uses.
+        # One settings file, not two. Settings moved out of the user profile
+        # and into the program's own folder, so an older copy could be left
+        # behind there - a second settings.json that nothing reads.
         #
         # This runs after config.load(), which has already copied those
-        # settings across, and never touches the folder currently in use.
-        self.state_cleanup = {"removed": [], "adopted": [], "failed": []}
+        # settings across, and never touches the folder currently in use. Any
+        # checkpoint in that folder is left alone and goes on being used from
+        # there; engine/paths.py searches it.
+        self.state_cleanup = {"removed": [], "kept": [], "failed": []}
         try:
             self.state_cleanup = paths.cleanup_duplicate_state()
         except Exception:
             pass            # housekeeping must never stop the app from starting
+
+        # A checkpoint inside the installation folder is the one that an
+        # upgrade would delete, so it is moved out before that can happen.
+        # Everything found anywhere else is used where it lies.
+        try:
+            for source, destination in paths.adopt_stray_checkpoints():
+                applog.write(f"moved {source} to {destination} - the "
+                             f"installation folder is replaced by an upgrade",
+                             where="models")
+        except Exception:
+            pass
 
         self._last_spoken = 0.0
         self.jobs = JobManager(lambda: self.backend, OUT_DIR,

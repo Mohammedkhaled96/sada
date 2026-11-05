@@ -216,6 +216,39 @@ S: dict[str, tuple[str, str]] = {
     "btn_download": ("Download", "تنزيل"),
     "btn_delete": ("Delete", "حذف"),
     "btn_stop_download": ("Stop the download", "إيقاف التنزيل"),
+    # Where the model files are. Every one of these names a full path on
+    # purpose: this is the text somebody reads out when the program cannot
+    # see a model they know they have, and a description of a folder is not
+    # something anyone can act on.
+    "models_where_name": ("Where the model files are",
+                          "مكان ملفات النموذج"),
+    "models_folder_is": ("Model files are kept in: {path}",
+                         "ملفات النموذج محفوظة في: {path}"),
+    "models_folder_pending": (
+        "This folder will be used the next time Sada starts.",
+        "سيُستخدم هذا المجلد في المرة القادمة التي يبدأ فيها صدى."),
+    "models_found_at": ("Found: {path}", "موجود: {path}"),
+    "models_found_none": (
+        "No model file was found in any of the folders searched.",
+        "لم يُعثر على أي ملف نموذج في أي من المجلدات التي تم البحث فيها."),
+    "models_searched": ("Folders searched, in this order:",
+                        "المجلدات التي تم البحث فيها، بهذا الترتيب:"),
+    # Phrased so the count can be one without the sentence reading wrongly.
+    # "1 model files found" is the kind of thing a screen reader says out
+    # loud, slowly, to somebody who is already having a bad time.
+    "models_found_count": ("Model files found: {count}",
+                           "ملفات النموذج الموجودة: {count}"),
+    "btn_find_model": ("Find my model", "ابحث عن النموذج"),
+    "btn_models_folder": ("Model files folder...", "مجلد ملفات النموذج..."),
+    "models_folder_prompt": ("Choose the folder your model files are kept in",
+                             "اختر المجلد الذي تحفظ فيه ملفات النموذج"),
+    "say_models_found": ("Model files found: {count}. The list has the paths.",
+                         "ملفات النموذج الموجودة: {count}. القائمة بها المسارات."),
+    "say_models_none": (
+        "No model file was found. The list names every folder searched.",
+        "لم يُعثر على أي ملف نموذج. القائمة تذكر كل مجلد تم البحث فيه."),
+    "say_models_folder": ("Model files folder: {path}",
+                          "مجلد ملفات النموذج: {path}"),
     "downloading": ("Downloading {name}: {done} of {total}",
                     "جارٍ تنزيل {name}: {done} من {total}"),
     "dl_progress_name": ("Download progress", "تقدّم التنزيل"),

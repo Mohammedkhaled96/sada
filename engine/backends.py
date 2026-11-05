@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from engine.paths import MODELS_DIR
+from engine.paths import MODELS_DIR, find_checkpoint, find_model_folder
 from engine.window import BACKEND_LOCK, short_window
 
 # name -> (faster-whisper repo id, openai checkpoint name)
@@ -56,9 +56,9 @@ class FasterWhisperBackend:
         from faster_whisper import WhisperModel
 
         repo = MODEL_NAMES[model_key][0]
-        local = MODELS_DIR / f"ct2-{repo}"
+        local = find_model_folder(f"ct2-{repo}")
         self.model = WhisperModel(
-            str(local) if local.exists() else repo,
+            str(local) if local else repo,
             device=device, compute_type=compute_type,
             cpu_threads=cpu_threads, num_workers=1,
         )
@@ -110,9 +110,13 @@ class OpenAIWhisperBackend:
 
         torch.set_num_threads(cpu_threads)
         ckpt = MODEL_NAMES[model_key][1]
-        local = MODELS_DIR / f"{ckpt}.pt"
+        # Searched, not computed. Handing load_model a path that does not
+        # exist makes it treat the string as a model name and fetch the
+        # checkpoint itself - 1.5 GB, with no progress and nothing asked -
+        # so a file that is on the disk in another folder has to be found.
+        local = find_checkpoint(f"{ckpt}.pt")
         self.model = whisper.load_model(
-            str(local) if local.exists() else ckpt,
+            str(local) if local else ckpt,
             device="cuda" if device == "cuda" else "cpu",
             download_root=str(MODELS_DIR),
         )

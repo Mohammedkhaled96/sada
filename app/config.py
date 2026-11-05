@@ -73,6 +73,13 @@ class Settings:
     device: str = "auto"
     language: str = "auto"
     hotwords: str = ""
+    # Where checkpoints are kept. Empty means the folder beside the rest of
+    # this installation's data, which is right for almost everyone. It is a
+    # setting because a checkpoint is up to 3 GB: somebody who keeps that on
+    # another drive should be able to say so rather than be told where it
+    # goes. engine/paths.py reads this field directly out of the file, so it
+    # applies from the next start and before any model is looked for.
+    models_dir: str = ""
 
     # output
     insert_mode: str = "cursor"
@@ -128,6 +135,10 @@ class Settings:
             self.language = "auto"
         if self.insert_mode not in INSERT_MODES:
             self.insert_mode = "cursor"
+        # Whitespace only, deliberately. A folder that does not exist right
+        # now is not a reason to forget the choice - a model kept on an
+        # external drive would be given away the first time it was unplugged.
+        self.models_dir = (self.models_dir or "").strip()
         self.speak_progress_every = max(0, min(600, int(self.speak_progress_every)))
         for f in ("hotkey_transcribe", "hotkey_settings", "hotkey_status",
                   "hotkey_cancel", "hotkey_window", "hotkey_dictate"):

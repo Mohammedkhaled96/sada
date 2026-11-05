@@ -1,9 +1,17 @@
-"""Where the program keeps its data, and removing a second copy of it.
+"""Where the program keeps its data, and how it finds a model that moved.
 
-The cleanup in engine.paths deletes a folder, so the tests that matter most
-here are the ones about what it refuses to delete. It runs at every startup,
-on every machine, with no prompt - the cost of getting it wrong is somebody
-else's gigabytes.
+Two things are being guarded, and both of them cost the user gigabytes when
+they go wrong.
+
+The cleanup deletes. It runs at every startup, on every machine, with no
+prompt, so the tests that matter most here are the ones about what it refuses
+to touch.
+
+The search reads. A checkpoint that is on the disk but not in the folder this
+version writes to used to be handed to whisper.load_model() as a path that
+does not exist, which makes it a model name - and the 1.5 GB arrives again
+with no progress and nothing asked. So the tests assert that a file an older
+release left behind is found, and found where it lies.
 
 Every case builds its own temporary profile and project, so nothing here can
 reach the real folders.
@@ -112,7 +120,7 @@ with tempfile.TemporaryDirectory() as td:
     p = fresh_paths(Path(td), Path(td) / "project")
     report = p.cleanup_duplicate_state()
     check("nothing there at all is not an error",
-          report == {"removed": [], "adopted": [], "failed": []}, str(report))
+          report == {"removed": [], "kept": [], "failed": []}, str(report))
 
 
 # ------------------------------------------------- what it does delete
@@ -136,19 +144,144 @@ with tempfile.TemporaryDirectory() as td:
           [x.name for x in p.duplicate_state_dirs()] == ["Sada"])
 
     report = p.cleanup_duplicate_state()
-    check("it is removed", not stale.exists())
-    check("and reported, rather than removed silently",
-          len(report["removed"]) == 1, str(report["removed"]))
+    check("the stale settings file is what gets removed",
+          not (stale / "settings.json").exists())
+    check("and it is reported, rather than removed silently",
+          [x.name for x in report["removed"]] == ["settings.json"],
+          str(report["removed"]))
 
-    # Deleting a checkpoint would be the letter of "remove the folder" and the
-    # opposite of its purpose: the user waits out the same download again.
-    check("a checkpoint we do not have is moved across, not destroyed",
-          (project / "models" / "medium.pt").exists())
-    check("and reported as adopted",
-          [x.name for x in report["adopted"]] == ["medium.pt"],
-          str(report["adopted"]))
-    check("a checkpoint we already have is not overwritten by the old one",
+    # This is the line that matters most in the file. An earlier version
+    # deleted the whole folder, having first moved the checkpoints out. One
+    # unreadable file or one path it had not thought of, and somebody's
+    # three-gigabyte download was gone. Nothing is moved and nothing else is
+    # deleted now: find_checkpoint() searches that folder, so a model left
+    # there goes on being used from where it is.
+    check("the checkpoints in it are left exactly where they were",
+          (stale / "models" / "medium.pt").exists()
+          and (stale / "models" / "small.pt").read_bytes() == b"the old copy")
+    check("so is everything else in it",
+          (stale / "out").is_dir() and (stale / "endpoint.json").exists())
+    check("the folder stays, and is reported as kept",
+          stale.is_dir() and [x.name for x in report["kept"]] == ["Sada"],
+          str(report["kept"]))
+    check("the copy we already had is untouched",
           (project / "models" / "small.pt").read_bytes() == b"the good copy")
+
+# A folder with nothing but our stale settings in it has nothing left to keep,
+# so it goes. Leaving an empty folder behind would be the duplicate surviving
+# in name, which is the thing this is for.
+with tempfile.TemporaryDirectory() as td:
+    empty = Path(td) / "profile" / "Sada"
+    empty.mkdir(parents=True)
+    (empty / "settings.json").write_text("{}", encoding="utf-8")
+
+    p = fresh_paths(Path(td) / "profile", Path(td) / "project")
+    report = p.cleanup_duplicate_state()
+    check("a folder holding nothing else is removed as well",
+          not empty.exists(), str(report))
+
+
+# --------------------------------------------- finding a model anywhere
+print("\n--- finding a model anywhere ---")
+
+# The failure this prevents is not a warning. engine.backends used to build
+# MODELS_DIR / name and hand it to whisper.load_model() without looking: a
+# path that does not exist is taken as a model name, and the checkpoint is
+# downloaded again - 1.5 GB, no progress, nothing asked. So a file that is on
+# the disk in a folder an older release wrote to has to be found.
+with tempfile.TemporaryDirectory() as td:
+    profile = Path(td) / "profile"
+    (profile / "Sada" / "models").mkdir(parents=True)
+    (profile / "Sada" / "models" / "large-v3-turbo.pt").write_bytes(b"old release")
+
+    project = Path(td) / "project"
+    (project / "models").mkdir(parents=True)
+
+    p = fresh_paths(profile, project, project / "models")
+    check("the folder we write to is searched first",
+          p.candidate_models_dirs()[0] == project / "models",
+          str(p.candidate_models_dirs()[0]))
+    found = p.find_checkpoint("large-v3-turbo.pt")
+    check("a checkpoint an older release left behind is found",
+          found == profile / "Sada" / "models" / "large-v3-turbo.pt", str(found))
+    check("and it is read from where it lies, not copied",
+          (profile / "Sada" / "models" / "large-v3-turbo.pt").exists()
+          and not (project / "models" / "large-v3-turbo.pt").exists())
+    check("one that is nowhere is reported as nowhere",
+          p.find_checkpoint("medium.pt") is None)
+    # Membership, not equality: PROJECT_ROOT is a real candidate folder and
+    # this checkout has a real checkpoint in it, which no temporary directory
+    # can hide. That it shows up here is the function working.
+    listed = p.found_checkpoints()
+    check("every checkpoint on every path is listed for the user",
+          profile / "Sada" / "models" / "large-v3-turbo.pt" in listed,
+          str(listed))
+    check("the same folder twice is searched once",
+          len(p.candidate_models_dirs()) == len(
+              {str(x).lower() for x in p.candidate_models_dirs()}))
+
+# The chosen folder is read out of settings.json by engine/paths.py itself,
+# because app.config imports it and the import cannot go the other way. If
+# that ever stops working the symptom is silent: the setting is accepted,
+# saved, and ignored.
+with tempfile.TemporaryDirectory() as td:
+    state = Path(td) / "state"
+    state.mkdir(parents=True)
+    elsewhere = Path(td) / "another drive" / "whisper"
+    elsewhere.mkdir(parents=True)
+    (state / "settings.json").write_text(
+        '{"models_dir": "' + str(elsewhere).replace("\\", "\\\\") + '"}',
+        encoding="utf-8")
+
+    p = fresh_paths(Path(td) / "profile", state)
+    check("a folder chosen in Settings is where checkpoints are written",
+          p.MODELS_DIR == elsewhere, str(p.MODELS_DIR))
+    check("and the default is still reported separately, so Settings can "
+          "store nothing when they match",
+          p.default_models_dir() != elsewhere, str(p.default_models_dir()))
+
+with tempfile.TemporaryDirectory() as td:
+    state = Path(td) / "state"
+    state.mkdir(parents=True)
+    (state / "settings.json").write_text("{ this is not json", encoding="utf-8")
+
+    p = fresh_paths(Path(td) / "profile", state)
+    check("an unreadable settings file falls back to the default rather "
+          "than failing to start",
+          p.MODELS_DIR == p.default_models_dir(), str(p.MODELS_DIR))
+
+# The environment variable has to win, or a container with a mounted volume
+# would follow whatever happened to be in a settings file inside the image.
+with tempfile.TemporaryDirectory() as td:
+    state = Path(td) / "state"
+    state.mkdir(parents=True)
+    (state / "settings.json").write_text('{"models_dir": "C:\\\\chosen"}',
+                                         encoding="utf-8")
+    p = fresh_paths(Path(td) / "profile", state, Path(td) / "mounted")
+    check("SADA_MODELS_DIR beats the setting", p.MODELS_DIR == Path(td) / "mounted",
+          str(p.MODELS_DIR))
+
+
+# ------------------------------------- the one folder an upgrade deletes
+print("\n--- the one folder an upgrade deletes ---")
+
+# A checkpoint beside the executable is the only one that has to be moved: the
+# installer replaces that folder wholesale, so the file would be gone after
+# the next update. Everything found anywhere else is left alone on purpose.
+with tempfile.TemporaryDirectory() as td:
+    p = fresh_paths(Path(td) / "profile", Path(td) / "state",
+                    Path(td) / "state" / "models")
+    check("a source checkout is not replaced by an upgrade, so nothing moves",
+          p.adopt_stray_checkpoints() == [], str(p.adopt_stray_checkpoints()))
+
+check("only the installation folder is adopted from",
+      "_program_dir() / \"models\"" in Path(
+          Path(__file__).resolve().parent.parent / "engine" / "paths.py"
+      ).read_text(encoding="utf-8"))
+check("and only in a frozen build",
+      "if not _frozen():\n        return []" in Path(
+          Path(__file__).resolve().parent.parent / "engine" / "paths.py"
+      ).read_text(encoding="utf-8"))
 
 
 # ----------------------------------------------------- it runs at startup

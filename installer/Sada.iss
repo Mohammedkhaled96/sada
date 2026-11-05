@@ -6,8 +6,8 @@
 ;
 ; One installer, two ways to run it:
 ;
-;   Sada-Setup-1.1.1.exe                                  interactive wizard
-;   Sada-Setup-1.1.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   unattended
+;   Sada-Setup-1.1.2.exe                                  interactive wizard
+;   Sada-Setup-1.1.2.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART   unattended
 ;
 ; The silent form is what winget invokes, so it must complete with no window, no
 ; prompt and no reboot, and must still register a working uninstaller. Everything
@@ -24,7 +24,7 @@
 ; under %LocalAppData%\Sada so an upgrade or reinstall never re-downloads it.
 
 #define AppName          "Sada"
-#define AppVersion       "1.1.1"
+#define AppVersion       "1.1.2"
 #define AppPublisher     "Mohammed Khaled"
 #define AppExe           "Sada.exe"
 #define AppUrl           "https://hub.docker.com/r/mohammedkhaledmahmoud/sada"
@@ -53,9 +53,33 @@ DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
 
+; One install location, for every update, with no way to end up with two.
+;
+; DisableDirPage removes the folder page from the wizard. It is not there to
+; take a choice away - it is there because {localappdata} means a different
+; folder depending on which account is running Setup, and the program and its
+; data have to agree on one. It also removes a page that has to be navigated
+; by someone who cannot see it, for a decision that has one right answer.
+;
+; UsePreviousAppDir is the default, and is stated because it is what makes an
+; upgrade land on top of the existing installation instead of beside it. With
+; AppId unchanged since 1.0.0, every update replaces the same folder.
+DisableDirPage=yes
+UsePreviousAppDir=yes
+
 ; Per-user, so no elevation and no UAC prompt.
+;
+; PrivilegesRequiredOverridesAllowed=dialog used to be here, and it was the
+; one real way the install location could move. It offers "install for all
+; users", which restarts Setup elevated - and {localappdata} in an elevated
+; process is the elevating administrator's profile, not the signed-in user's.
+; The program then installed under one account while running as another, so it
+; looked for its models in a folder nothing had written to and the 1.5 GB
+; download appeared to have vanished. {userstartup} went to the wrong profile
+; with it, so it also did not start with Windows. Per-user is what the winget
+; manifest declares (Scope: user) and what the whole design assumes, so the
+; choice is gone rather than documented.
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
 
 OutputDir=out
 OutputBaseFilename=Sada-Setup-{#AppVersion}

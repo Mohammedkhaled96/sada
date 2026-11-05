@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.backends import MODEL_NAMES, OPENAI_SHA, openai_url
-from engine.paths import MODELS_DIR
+from engine.paths import MODELS_DIR, find_checkpoint
 
 # Content-Length as served by OpenAI's CDN, so a size can be shown before any
 # network call and a truncated file can be spotted without hashing 3 GB.
@@ -70,7 +70,12 @@ class ModelInfo:
 
 def info(model_key: str) -> ModelInfo:
     checkpoint = MODEL_NAMES[model_key][1]
-    path = MODELS_DIR / f"{checkpoint}.pt"
+    filename = f"{checkpoint}.pt"
+    # Where the file is, not where this version would write it. A checkpoint
+    # left behind by an older release, or put somewhere else by hand, counts
+    # as installed - otherwise Settings reports "not installed" for a model
+    # that is sitting on the disk, and offers to download it again.
+    path = find_checkpoint(filename) or (MODELS_DIR / filename)
     expected = SIZES.get(checkpoint, 0)
     actual = path.stat().st_size if path.exists() else 0
     # Size is enough to call it installed; the hash is checked at download time
@@ -104,7 +109,11 @@ def download(model_key: str, on_progress=None,
         return m.path
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    part = m.path.with_suffix(".pt.part")
+    # Always the folder this version writes to, even when info() resolved the
+    # path to a folder that is only searched: a truncated file left in a
+    # read-only or foreign location must not decide where 1.5 GB lands.
+    target = MODELS_DIR / f"{m.checkpoint}.pt"
+    part = target.with_suffix(".pt.part")
     url = openai_url(m.checkpoint)
     expected_sha = OPENAI_SHA[m.checkpoint]
 
@@ -131,8 +140,8 @@ def download(model_key: str, on_progress=None,
                 f"the downloaded file does not match its checksum "
                 f"({done} bytes); it may be corrupt or truncated")
 
-        part.replace(m.path)        # atomic: only now does it look installed
-        return m.path
+        part.replace(target)        # atomic: only now does it look installed
+        return target
     except BaseException:
         try:
             part.unlink(missing_ok=True)

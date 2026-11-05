@@ -268,6 +268,39 @@ model.
 Press **Delete** to remove a model you no longer want; you can always download it
 again.
 
+### Where the model file is kept
+
+Under the Download and Delete buttons there is a field that **names the folder
+in full** and lists every model file found in it. It is a read-only field
+rather than a label, so you can move into it with the reading keys and have it
+read out, or copy it into a message.
+
+Installed, the folder is `%LOCALAPPDATA%\Sada\models`. It is deliberately
+**outside** the program's own folder: an update replaces the program folder,
+and a 1.5 GB download must never be paid for twice.
+
+**Find my model** names every folder the program looks in, in the order it
+looks, and everything it found in them. If your model file is in any of those
+folders it is already being used from there — there is nothing to move. If it
+is somewhere else, you have two choices: put the file into the folder named at
+the top of the list, or press **Model files folder...** and point the program
+at the folder it is already in. A folder chosen that way is used from the next
+time Sada starts.
+
+The folders searched, in order:
+
+| | |
+|---|---|
+| 1 | the folder in use — the one the field names |
+| 2 | `%LOCALAPPDATA%\Sada\models` |
+| 3 | `models\` inside the program's own folder |
+| 4 | `%APPDATA%\Sada\models` |
+| 5 | `models\` next to the source checkout |
+
+A model file found in the program's own folder is moved out to the folder in
+use, because that one is deleted by the next update. A file found anywhere
+else is left exactly where it is and read from there.
+
 From the command line:
 
 ```bash
@@ -381,7 +414,8 @@ when you have seen it get a specific file wrong.
 | `.json` | every segment with timings and confidence, for other tools |
 | `partial.jsonl` | the resume checkpoint — present only if a run was interrupted |
 | Settings | `%LOCALAPPDATA%\Sada\settings.json` |
-| Models | `models\` next to the program |
+| Models | `%LOCALAPPDATA%\Sada\models\` — outside the program folder, so an update never removes them. Settings names the folder and can point it elsewhere. |
+| Log | `%LOCALAPPDATA%\Sada\sada.log` — one megabyte, with one older copy |
 
 A finished run deletes its checkpoint, so if `partial.jsonl` exists, that file was
 interrupted and will resume.
@@ -431,6 +465,8 @@ container exposes:
 | "No document is open in Word" | Press `Ctrl+N` in Word. |
 | "The transcription model is still loading" | Wait about half a minute after starting the program. |
 | "The transcription model could not be loaded" | The model file is missing or damaged. Open Settings, select it under Model files, and download it again. |
+| It says **not installed** but you know you downloaded the model | Open Settings and press **Find my model**. It names every folder it looked in and everything it found. If your file is on that list it is already in use; if not, put it in the folder named at the top, or press **Model files folder...** and point Sada at the folder it is in. |
+| It wants to download the model again after an update | The same answer. Nothing about an update moves the model file, so this means the file is in a folder that is not being searched — **Find my model** will say which folders are. |
 | "These shortcuts could not be registered" | Another program owns them. Change them in Settings. |
 | "The program is already running" | It is in the notification area. Press `Ctrl+Shift+W`. |
 | "Time remaining: still measuring" | Normal at the start of a file — there is nothing to measure from yet. |

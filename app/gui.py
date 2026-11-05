@@ -25,7 +25,7 @@ import wx
 
 from app import config, i18n
 from app import autostart, mediapause
-from engine import models
+from engine import models, paths
 from app.config import (DEVICES, INSERT_MODES, LANGUAGES, MODELS, UI_LANGUAGES,
                         Settings, device_labels, format_hotkey, insert_labels,
                         language_labels, model_labels, parse_hotkey,
@@ -161,7 +161,15 @@ class SettingsDialog(wx.Dialog):
         self._dl_thread = None
         self._dl_cancel = None
         self._model_rows: list = []
-        panel = wx.Panel(self)
+        # A scroller, for the reason the main window needs one. The sections
+        # here want about 1600 pixels and a 1280x720 screen has 660 of them
+        # usable; without a scroller the sizer takes the shortfall out of
+        # whatever will give, and what gave was the Save button - measured at
+        # zero pixels high, on this machine, below a dialog that ran off the
+        # bottom of the screen. Tab moves focus and the scroller follows it,
+        # so nothing here is unreachable from the keyboard either way.
+        panel = wx.ScrolledWindow(self, style=wx.TAB_TRAVERSAL | wx.VSCROLL)
+        panel.SetScrollRate(0, 20)
         outer = wx.BoxSizer(wx.VERTICAL)
 
         # ------------------------------------------------------- interface
@@ -365,8 +373,33 @@ class SettingsDialog(wx.Dialog):
         mrow.Add(self.btn_download, 0, wx.RIGHT, PAD)
         mrow.Add(self.btn_delete, 0)
         mf.Add(mrow, 0, wx.ALL, PAD)
+
+        # Which folder, in full, and what is in it. A read-only field for the
+        # reason given above dl_status: a screen reader can be moved into this
+        # one and read it whenever the user wants. It is here because a model
+        # the program could not see was the hardest thing anyone had to
+        # report - they had the file, Settings said "not installed", and
+        # nothing anywhere named the folder that had been looked in.
+        self.models_dir_value = settings.models_dir
+        self.models_where = wx.TextCtrl(
+            mfbox, value="",
+            style=wx.TE_READONLY | wx.TE_MULTILINE | wx.TE_DONTWRAP)
+        _set_accessible_name(self.models_where, t("models_where_name"))
+        self.models_where.SetMinSize((-1, 92))
+        mf.Add(self.models_where, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, PAD)
+
+        frow = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_find_model = wx.Button(mfbox, label=t("btn_find_model"))
+        self.btn_models_dir = wx.Button(mfbox, label=t("btn_models_folder"))
+        self.btn_find_model.Bind(wx.EVT_BUTTON, self.on_find_model)
+        self.btn_models_dir.Bind(wx.EVT_BUTTON, self.on_models_folder)
+        frow.Add(self.btn_find_model, 0, wx.RIGHT, PAD)
+        frow.Add(self.btn_models_dir, 0)
+        mf.Add(frow, 0, wx.ALL, PAD)
+
         outer.Add(mf, 0, wx.EXPAND | wx.ALL, PAD)
         self.refresh_models()
+        self.refresh_models_where()
 
         # ---------------------------------------------------------- buttons
         reset = wx.Button(panel, label=t("btn_reset"))
@@ -383,8 +416,17 @@ class SettingsDialog(wx.Dialog):
         outer.Add(btns, 0, wx.EXPAND | wx.ALL, PAD)
 
         panel.SetSizer(outer)
-        outer.SetSizeHints(self)
-        self.SetSize((660, min(940, self.GetBestSize().height + 40)))
+        panel.Layout()
+        panel.FitInside()
+        # SetSizeHints used to be here, and it made the sizer's full height
+        # the dialog's minimum - which is what stopped SetSize from having
+        # any effect and squeezed the buttons away. The size is chosen
+        # against the screen instead, and the scroller covers the rest.
+        wanted = outer.CalcMin()
+        usable = wx.Display().GetClientArea()
+        self.SetMinSize((620, 420))
+        self.SetClientSize((max(wanted.width, 660),
+                            min(wanted.height + 8, usable.height - 60)))
         self.CentreOnScreen()
 
         self.Bind(wx.EVT_BUTTON, self.on_ok, id=wx.ID_OK)
@@ -424,6 +466,7 @@ class SettingsDialog(wx.Dialog):
         s.device = DEVICES[self.device.GetSelection()]
         s.language = LANGUAGES[self.language.GetSelection()]
         s.hotwords = self.hotwords.GetValue().strip()
+        s.models_dir = self.models_dir_value
         s.insert_mode = INSERT_MODES[self.insert_mode.GetSelection()]
         s.timestamps = self.timestamps.GetValue()
         s.rtl_auto = self.rtl_auto.GetValue()
@@ -515,6 +558,70 @@ class SettingsDialog(wx.Dialog):
     def _selected_model(self):
         i = self.model_list.GetFirstSelected()
         return self._model_rows[i] if 0 <= i < len(self._model_rows) else None
+
+    # -------------------------------------------------- where the models are
+    def refresh_models_where(self) -> None:
+        """Write out the folder in use and every checkpoint that was found.
+
+        Full paths, not a friendly summary. This text exists to be read aloud
+        and repeated in a report, and "your models folder" cannot be acted on
+        by anybody.
+        """
+        pending = self.models_dir_value
+        lines = [t("models_folder_is", path=pending or str(paths.MODELS_DIR))]
+        if pending and pending != str(paths.MODELS_DIR):
+            # Honest about when it applies: engine/paths.py resolves the
+            # folder once, at import, so a folder chosen now is read at the
+            # next start. Saying so beats a setting that looks ignored.
+            lines.append(t("models_folder_pending"))
+        found = paths.found_checkpoints()
+        if found:
+            lines += [t("models_found_at", path=str(p)) for p in found]
+        else:
+            lines.append(t("models_found_none"))
+        self.models_where.SetValue("\n".join(lines))
+
+    def on_find_model(self, _evt) -> None:
+        """Name every folder that gets searched, and everything found in them.
+
+        This is the answer to "the program cannot see my model". The folders
+        are named rather than described, so the file can be moved into one of
+        them - though usually it is already on the list, in which case it is
+        being used from there and there is nothing to do.
+        """
+        lines = [t("models_searched")]
+        lines += [f"    {folder}" for folder in paths.candidate_models_dirs()]
+        found = paths.found_checkpoints()
+        if found:
+            lines.append(t("models_found_count", count=len(found)))
+            lines += [f"    {p}" for p in found]
+        else:
+            lines.append(t("models_found_none"))
+        self.models_where.SetValue("\n".join(lines))
+        self.refresh_models()
+        if self.on_announce:
+            self.on_announce(t("say_models_found", count=len(found)) if found
+                             else t("say_models_none"))
+
+    def on_models_folder(self, _evt) -> None:
+        """Choose the folder checkpoints are kept in.
+
+        Picking the default folder stores nothing rather than storing that
+        path, so the setting goes on following the default if it ever moves.
+        """
+        with wx.DirDialog(self, t("models_folder_prompt"),
+                          defaultPath=str(paths.MODELS_DIR),
+                          style=wx.DD_DEFAULT_STYLE) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            chosen = dlg.GetPath()
+        self.models_dir_value = ("" if chosen == str(paths.default_models_dir())
+                                 else chosen)
+        self.refresh_models_where()
+        if self.on_announce:
+            self.on_announce(t("say_models_folder",
+                               path=self.models_dir_value
+                               or str(paths.default_models_dir())))
 
     def _downloading(self) -> bool:
         return self._dl_thread is not None and self._dl_thread.is_alive()
@@ -722,7 +829,9 @@ class SettingsDialog(wx.Dialog):
         self.sapi.SetValue(d.speak_via_sapi)
         self.only_word.SetValue(d.only_when_word_focused)
         self.settings.model = d.model
+        self.models_dir_value = d.models_dir
         self.refresh_models()
+        self.refresh_models_where()
         self.was_reset = True
         self.ui_language.SetFocus()
         if self.on_announce:

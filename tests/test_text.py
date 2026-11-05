@@ -321,6 +321,82 @@ check("it rotates rather than growing without end",
       applog.MAX_BYTES <= 2_000_000, f"{applog.MAX_BYTES} bytes")
 
 
+print("\n--- one install location, and a model that is never lost twice ---")
+
+# The installer settings are checked as text because compiling an Inno script
+# needs Windows and Inno Setup, and this file runs on a Linux runner. They are
+# worth checking anywhere: these three lines are the difference between the
+# program and its data agreeing on a folder and not.
+iss = (ROOT / "installer" / "Sada.iss").read_text(encoding="utf-8")
+check("the install folder is under the user's own profile",
+      "DefaultDirName={localappdata}\\Programs\\{#AppName}" in iss)
+check("the wizard offers no folder to change it to",
+      "DisableDirPage=yes" in iss)
+check("an upgrade lands on top of the existing installation",
+      "UsePreviousAppDir=yes" in iss)
+# This is the one that actually moved the install location. "Install for all
+# users" restarts Setup elevated, and {localappdata} in an elevated process is
+# the administrator's profile - so the program installed under one account and
+# ran as another, looking for its models in a folder nothing had written to.
+directives = [line for line in iss.splitlines()
+              if line.strip() and not line.lstrip().startswith(";")]
+check("and there is no way to install it elevated into another profile",
+      "PrivilegesRequired=lowest" in directives
+      and not any(line.startswith("PrivilegesRequiredOverridesAllowed")
+                  for line in directives))
+check("the AppId has not changed, so every update replaces the same folder",
+      "{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}" in iss)
+
+from engine import paths                                             # noqa: E402
+
+check("checkpoints are looked for in more than one folder",
+      len(paths.candidate_models_dirs()) > 1,
+      str([str(p) for p in paths.candidate_models_dirs()]))
+check("starting with the one this version writes to",
+      paths.candidate_models_dirs()[0] == paths.MODELS_DIR)
+check("no folder is searched twice",
+      len(paths.candidate_models_dirs())
+      == len({str(p).lower() for p in paths.candidate_models_dirs()}))
+check("a checkpoint that is nowhere is reported as nowhere, not guessed at",
+      paths.find_checkpoint("no-such-model-420.pt") is None)
+
+# The symptom of getting this wrong is not an error message. load_model() is
+# handed a path; if the path does not exist it treats the string as a model
+# name and downloads the checkpoint itself, 1.5 GB, with nothing asked.
+backends_source = (ROOT / "engine" / "backends.py").read_text(encoding="utf-8")
+check("the model is loaded from where the file is, not where it would be put",
+      'local = find_checkpoint(f"{ckpt}.pt")' in backends_source
+      and "str(local) if local else ckpt" in backends_source)
+models_source = (ROOT / "engine" / "models.py").read_text(encoding="utf-8")
+check("and Settings calls a model installed wherever it actually is",
+      "path = find_checkpoint(filename) or (MODELS_DIR / filename)"
+      in models_source)
+check("while a download still goes to the one folder we write to",
+      'target = MODELS_DIR / f"{m.checkpoint}.pt"' in models_source)
+
+# The folder and what is in it have to be readable by someone who cannot see
+# the screen: this was the hardest thing anybody had to report, because the
+# program said "not installed" and nothing named the folder it had looked in.
+gui_source = (ROOT / "app" / "gui.py").read_text(encoding="utf-8")
+check("Settings says which folder, in full, and what was found in it",
+      "def refresh_models_where" in gui_source
+      and "models_found_at" in gui_source)
+check("with a button that names every folder searched",
+      "def on_find_model" in gui_source and "models_searched" in gui_source)
+check("and one to put the models somewhere else entirely",
+      "def on_models_folder" in gui_source and "wx.DirDialog" in gui_source)
+check("the resolved folder is in the log, so a report can name it",
+      "models={paths.MODELS_DIR}" in main_source)
+
+from app import i18n                                                 # noqa: E402
+
+for key in ("models_folder_is", "models_found_none", "models_searched",
+            "btn_find_model", "btn_models_folder", "say_models_none"):
+    pair = i18n.S.get(key)
+    check(f"{key} is translated, not just English",
+          bool(pair) and len(pair) > 1 and bool(pair[1]), str(pair))
+
+
 print("\n" + "=" * 60)
 if failures:
     print(f"FAILED: {len(failures)}")
