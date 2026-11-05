@@ -37,7 +37,7 @@ screen readers.
 
 | | |
 |---|---|
-| **Direct download** | [`Sada-Setup-1.1.1.exe`](https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.1/Sada-Setup-1.1.1.exe) (223 MB) |
+| **Direct download** | [`Sada-Setup-1.1.2.exe`](https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.2/Sada-Setup-1.1.2.exe) (223 MB) |
 | **All releases** | [releases page](https://github.com/Mohammedkhaled96/sada/releases) |
 | **Checksum** | `SHA256SUMS.txt` is attached to each release |
 
@@ -350,7 +350,7 @@ Four tags are published for every release:
 
 | Tag | Moves to | Use it when |
 |---|---|---|
-| `1.1.1` | nothing, ever | you need the same bytes every time — CI, a reproducible result |
+| `1.1.2` | nothing, ever | you need the same bytes every time — CI, a reproducible result |
 | `1.1` | the newest 1.1.x | you want fixes but no new behaviour |
 | `1` | the newest 1.x | **the sensible default**, and what `docker-compose.yml` uses |
 | `latest` | the newest release of all | you are trying it out and do not mind a major upgrade |
@@ -377,7 +377,7 @@ stays a Windows program.
 |---|---|
 | Download | **601 MB** compressed |
 | RAM | **at least 6 GB for the container** — the model is held in float32 |
-| Tags | `latest`, `1`, `1.1`, `1.1.1` |
+| Tags | `latest`, `1`, `1.1`, `1.1.2` |
 
 ---
 
@@ -557,7 +557,7 @@ Needs the project venv, `binfmpeg.exe`, PyInstaller, and
 .venv\Scripts\python.exe -m PyInstaller Sada.spec --noconfirm
 
 # 2. Portable release
-powershell -Command "Compress-Archive -Path 'dist\Sada\*' -DestinationPath 'release\Sada-1.1.1-portable.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\Sada\*' -DestinationPath 'release\Sada-1.1.2-portable.zip' -Force"
 
 # 3. Installer
 "%LocalAppData%\Programs\Inno Setup 6\ISCC.exe" installer\Sada.iss

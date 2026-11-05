@@ -10,16 +10,16 @@
 #   InstallerSha256  the hash of that exact file
 #
 # Get the hash with:
-#   certutil -hashfile release\Sada-Setup-1.0.1.exe SHA256
+#   certutil -hashfile release\Sada-Setup-1.1.2.exe SHA256
 # or:
-#   winget hash release\Sada-Setup-1.0.1.exe
+#   winget hash release\Sada-Setup-1.1.2.exe
 #
 # Then validate and test locally before opening a pull request:
 #   winget validate --manifest winget
 #   winget install --manifest winget
 
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.1.1
+PackageVersion: 1.1.2
 
 # Inno Setup. Declaring the type lets winget apply the right silent switches and
 # find the uninstall entry without being told how.
@@ -53,21 +53,21 @@ UpgradeBehavior: install
 # _is1 suffix. winget uses this to match an installed copy to this package.
 ProductCode: '{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}_is1'
 
-ReleaseDate: 2026-11-02
+ReleaseDate: 2026-11-05
 
 # Files the installer leaves behind that winget should know about.
 AppsAndFeaturesEntries:
   - DisplayName: Sada
     Publisher: Mohammed Khaled
-    DisplayVersion: 1.1.1
+    DisplayVersion: 1.1.2
     ProductCode: '{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}_is1'
     UpgradeCode: '{8E2C1F4A-9D3B-4A77-B5E1-2C9F6A0D1B83}'
     InstallerType: inno
 
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.1/Sada-Setup-1.1.1.exe
-    InstallerSha256: 7B5F2822AA7A289A63CA1CD58C942785F09CA2537E205DE75BAAA78CA0070517
+    InstallerUrl: https://github.com/Mohammedkhaled96/sada/releases/download/v1.1.2/Sada-Setup-1.1.2.exe
+    InstallerSha256: D9ABA5983486272215FDEE86A666CC014FE9E1CBFD41BA290453055BB42606DC
 
 ManifestType: installer
 ManifestVersion: 1.6.0

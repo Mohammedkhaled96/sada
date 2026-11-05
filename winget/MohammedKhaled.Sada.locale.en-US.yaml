@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 
 PackageIdentifier: MohammedKhaled.Sada
-PackageVersion: 1.1.1
+PackageVersion: 1.1.2
 PackageLocale: en-US
 
 Publisher: Mohammed Khaled
@@ -71,37 +71,36 @@ Tags:
   - productivity
 
 ReleaseNotes: |-
-  Voice typing: press Ctrl+Shift+D in any text box, speak, press it again, and
-  the words appear where the cursor is. Everything still runs on your own
-  machine - there is no account, no key and nothing sent anywhere.
+  One install location, and a model that is never downloaded twice.
 
-  - Dictate into any application, not only Word: Notepad, a browser, a message
-    box in Teams or WhatsApp. Word still gets one undo step for the whole
-    insertion and the right reading direction; everywhere else the text is
-    pasted and your own clipboard is put straight back
-  - The text goes to the window you started dictating in, even if something
-    else takes the foreground while it is being transcribed
-  - A password box is refused out loud rather than filled
-  - One language per recording, detected over the whole of it, with the reading
-    direction following it - Arabic from the right, English from the left
-  - Each job starts on its own line with a blank line before it, so running
-    several no longer runs the text together
-  - Whatever is playing is paused for the length of the recording, because the
-    microphone hears the music too
-  - The model can be freed from memory, from the tray or after every dictation,
-    and loads itself again when you next dictate
-  - Sada can start with Windows, as a shortcut in your Startup folder that you
-    can see and delete
-  - A log file beside your settings, so a problem can be explained without
-    being reproduced. It records what failed, never what you dictated
-  - The program window closes with Escape, Alt+F4 or Ctrl+W and stays closed,
-    and it opens with a welcome listing every command and its shortcut
-  - The tray icon shows at a glance whether Sada is ready, working or
-    recording, and its menu lists every job and what became of it
-  - Your corrections list from Settings is applied to dictation. It was written
-    and documented and never actually ran
+  People who had already downloaded the speech model found that a new version
+  could not see it, and had to wait out the 1.5 GB again. There were two
+  reasons and both are fixed.
 
-ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.1.1
+  - The installer no longer offers to install for all users. That option
+    restarted Setup with administrator rights, where %LocalAppData% means the
+    administrator's profile rather than yours - so Sada installed under one
+    account and ran as another, looking for the model in a folder nothing had
+    written to. It also put the "start with Windows" shortcut in the wrong
+    profile. Sada installs for you only, in one folder, for every update.
+  - The model file is now looked for in every folder it could reasonably be
+    in, and used from wherever it is. Before, a checkpoint one folder away was
+    indistinguishable from no checkpoint at all, and the download started
+    again with nothing asked.
+  - Settings names the folder in full, in a field a screen reader can be moved
+    into, and lists every model file in it. "Find my model" says exactly which
+    folders were searched and what was found in them. There is also a button
+    to keep the models somewhere else entirely, for anyone who would rather
+    not have 3 GB on their system drive.
+  - The folder cleanup that runs at startup used to delete a whole directory.
+    It removes only the stale settings file now, and only if nothing else is
+    beside it. No model file is ever moved or deleted without saying so.
+  - The Settings window scrolls. On a short screen its Save button was being
+    squeezed to nothing.
+
+  Nothing about this release changes where your existing settings or models
+  are kept, and updating does not re-download anything.
+ReleaseNotesUrl: https://github.com/Mohammedkhaled96/sada/releases/tag/v1.1.2
 
 Documentations:
   - DocumentLabel: User Guide
